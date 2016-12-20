@@ -120,7 +120,7 @@ typedef struct tlisp_obj_t *(*tlisp_fn)(struct tlisp_obj_t*, env_t*);
 
 typedef struct tlisp_obj_t {
     union {
-        float num;
+        int num;
         char *str;
         char *sym;
         struct {
@@ -162,9 +162,13 @@ tlisp_obj_t *tlisp_nil;
 
 tlisp_obj_t *tlisp_print(tlisp_obj_t *obj, env_t *env)
 {
+    if (!obj) {
+        printf("\n");
+        return tlisp_nil;
+    }
     switch (obj->tag) {
     case NUM:
-        printf("%f\n", obj->num);
+        printf("%d\n", obj->num);
         break;
     case STRING:
         printf("%s\n", obj->str);
@@ -207,6 +211,21 @@ void init_genv(env_t *genv)
     }
 }
 
+tlisp_obj_t *parse_num(char **cursor)
+{
+    tlisp_obj_t *obj = malloc(sizeof(tlisp_obj_t));
+    int f = 0;
+
+    while (*cursor && !whitespace(**cursor) && **cursor != ')') {
+        f *= 10;
+        f += **cursor - '0';
+        (*cursor)++;
+    }
+    obj->num = f;
+    obj->tag = NUM;
+    return obj;
+}
+
 tlisp_obj_t *parse_str(char **cursor)
 {
     tlisp_obj_t *obj = malloc(sizeof(tlisp_obj_t));
@@ -226,28 +245,13 @@ tlisp_obj_t *parse_str(char **cursor)
     return obj;
 }
 
-tlisp_obj_t *parse_num(char **cursor)
-{
-    tlisp_obj_t *obj = malloc(sizeof(tlisp_obj_t));
-    float f = 0;
-
-    while (*cursor && !whitespace(**cursor)) {
-        f *= 10;
-        f += **cursor - '0';
-        (*cursor)++;
-    }
-    obj->num = f;
-    obj->tag = NUM;
-    return obj;
-}
-
 tlisp_obj_t *parse_sym(char **cursor)
 {
     tlisp_obj_t *obj = malloc(sizeof(tlisp_obj_t));
     char *lead = *cursor;
     size_t len = 0;
 
-    while (*lead && !whitespace(*lead)) {
+    while (*lead && !whitespace(*lead) && *lead != ')') {
         len++;
         lead++;
     }
@@ -267,10 +271,13 @@ tlisp_obj_t *parse_form(char **cursor)
 
     (*cursor)++;
     while ((c = **cursor)) {
-        if (whitespace(c))
+        if (whitespace(c)) {
+            (*cursor)++;
             continue;
-        if (c == ')') 
+        }
+        if (c == ')') {
             break;
+        }
 
         next = malloc(sizeof(tlisp_obj_t));
         next->cdr = NULL;
@@ -279,7 +286,7 @@ tlisp_obj_t *parse_form(char **cursor)
             next->car = parse_str(cursor);
         } else if (isdigit(c)) {
             next->car = parse_num(cursor);
-        } else if (c == '(') {
+       } else if (c == '(') {
             next->car = parse_form(cursor);
         } else {
             next->car = parse_sym(cursor);
