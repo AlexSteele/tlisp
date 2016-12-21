@@ -507,6 +507,7 @@ tlisp_obj_t *read_form(char **cursor)
             continue;
         }
         if (c == ')') {
+            (*cursor)++;
             break;
         }
 
@@ -517,7 +518,7 @@ tlisp_obj_t *read_form(char **cursor)
             next->car = read_str(cursor);
         } else if (isdigit(c)) {
             next->car = read_num(cursor);
-       } else if (c == '(') {
+        } else if (c == '(') {
             next->car = read_form(cursor);
         } else {
             next->car = read_sym(cursor);
@@ -530,7 +531,6 @@ tlisp_obj_t *read_form(char **cursor)
         curr = next;
         (*cursor)++;
     }
-    (*cursor)++;
     assert_type(head->car, SYMBOL);
     return head;
 }
@@ -544,7 +544,7 @@ tlisp_obj_t **read(char *raw, size_t *n)
 
     while ((c = *raw)) {
         if (whitespace(c)) {
-            ;
+            raw++;
         } else if (c == '(') {
             tlisp_obj_t *form = read_form(&raw);
             if (!form) {
@@ -561,8 +561,6 @@ tlisp_obj_t **read(char *raw, size_t *n)
             fprintf(stderr, "ERROR: Unexpected symbol '%c'\n", c);
             exit(1);
         }
-        printf("%c\n", c);
-        raw++;
     }
     *n = len;
     return forms;
