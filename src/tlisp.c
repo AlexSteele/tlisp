@@ -10,7 +10,6 @@ enum obj_tag_t {
     NUM,
     STRING,
     SYMBOL,
-    FORM,
     CONS,
     NFUNC,
     LAMBDA,
@@ -24,7 +23,6 @@ const char *tag_str(enum obj_tag_t t)
     case NUM: return "NUM";
     case STRING: return "STRING";
     case SYMBOL: return "SYMBOL";
-    case FORM: return "FORM";
     case NFUNC: return "NFUNC";
     case CONS: return "CONS";
     case LAMBDA: return "LAMBDA";
@@ -160,6 +158,26 @@ typedef struct tlisp_obj_t {
     enum obj_tag_t tag;
 } tlisp_obj_t;
 
+#define DEF_CONSTRUCTOR(abbrev, tag_)                   \
+    tlisp_obj_t *new_##abbrev()                         \
+    {                                                   \
+        tlisp_obj_t *obj = malloc(sizeof(tlisp_obj_t)); \
+        obj->tag = tag_;                                \
+        return obj;                                     \
+    }                                                   \
+    
+DEF_CONSTRUCTOR(str, STRING)
+DEF_CONSTRUCTOR(sym, SYMBOL)
+DEF_CONSTRUCTOR(num, NUM)
+
+tlisp_obj_t *new_cons()
+{
+    tlisp_obj_t *obj = malloc(sizeof(tlisp_obj_t));
+    obj->tag = CONS;
+    obj->cdr = NULL; 
+    return obj;
+}
+
 /* TODO: REMOVE EXTRA FORWARD DECL. */
 tlisp_obj_t *tlisp_true; 
 void obj_str(tlisp_obj_t *obj, char *str, size_t maxlen)
@@ -176,9 +194,6 @@ void obj_str(tlisp_obj_t *obj, char *str, size_t maxlen)
         break;
     case SYMBOL:
         snprintf(str, maxlen, "<symbol %s>", obj->sym);
-        break;
-    case FORM:
-        strncpy(str, "<form>", maxlen);
         break;
     case CONS:
         strncpy(str, "<cons>", maxlen);
@@ -216,6 +231,7 @@ void eval_args(tlisp_obj_t *args, env_t *env)
 
 tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *env)
 {
+    // TODO: FINISH IMPL
     switch (obj->tag) {
     case BOOL:
         return obj;
@@ -223,16 +239,13 @@ tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *env)
         return obj;
     case STRING:
         return obj;
-    case SYMBOL: {
+    case SYMBOL: 
         return env_find_bang(env, obj->sym);
-    }
-    case FORM: {
+    case CONS: {
         tlisp_obj_t *fn_obj = env_find_bang(env, obj->car->sym);
         eval_args(obj->cdr, env);
         return fn_obj->fn(obj->cdr, env);
     }
-    case CONS:
-        return 0;
     case NFUNC:
         return 0;
     case LAMBDA:
@@ -444,7 +457,7 @@ int whitespace(char c)
 
 tlisp_obj_t *read_num(char **cursor)
 {
-    tlisp_obj_t *obj = malloc(sizeof(tlisp_obj_t));
+    tlisp_obj_t *obj = new_num();
     int f = 0;
 
     while (*cursor && !whitespace(**cursor) && **cursor != ')') {
@@ -453,13 +466,12 @@ tlisp_obj_t *read_num(char **cursor)
         (*cursor)++;
     }
     obj->num = f;
-    obj->tag = NUM;
     return obj;
 }
 
 tlisp_obj_t *read_str(char **cursor)
 {
-    tlisp_obj_t *obj = malloc(sizeof(tlisp_obj_t));
+    tlisp_obj_t *obj = new_str();
     char *lead;
     size_t len = 0;
 
@@ -469,16 +481,14 @@ tlisp_obj_t *read_str(char **cursor)
         len++;
         lead++;
     }
-    obj->str = malloc(sizeof(char) * (len + 1));
-    memcpy(obj->str, *cursor, len);
-    obj->sym[len] = 0;
-    obj->tag = STRING;
+    obj->str = strndup(*cursor, (len + 1));
+    (*cursor) += len;
     return obj;
 }
 
 tlisp_obj_t *read_sym(char **cursor)
 {
-    tlisp_obj_t *obj = malloc(sizeof(tlisp_obj_t));
+    tlisp_obj_t *obj = new_sym();
     char *lead = *cursor;
     size_t len = 0;
 
@@ -486,15 +496,12 @@ tlisp_obj_t *read_sym(char **cursor)
         len++;
         lead++;
     }
-    obj->sym = malloc(sizeof(char) * (len + 1));
-    memcpy(obj->sym, *cursor, len);
-    obj->sym[len] = 0;
-    obj->tag = SYMBOL;
+    obj->sym = strndup(*cursor, (len + 1));
     (*cursor) += len;
     return obj;
 }
 
-tlisp_obj_t *read_form(char **cursor)
+tlisp_obj_t *read_list(char **cursor)
 {
     tlisp_obj_t *head = NULL;
     tlisp_obj_t *curr, *next;
@@ -511,15 +518,13 @@ tlisp_obj_t *read_form(char **cursor)
             break;
         }
 
-        next = malloc(sizeof(tlisp_obj_t));
-        next->cdr = NULL;
-        next->tag = head ? CONS : FORM;
+        next = new_cons();
         if (c == '"') {
             next->car = read_str(cursor);
         } else if (isdigit(c)) {
             next->car = read_num(cursor);
         } else if (c == '(') {
-            next->car = read_form(cursor);
+            next->car = read_list(cursor);
         } else {
             next->car = read_sym(cursor);
         }
@@ -529,7 +534,6 @@ tlisp_obj_t *read_form(char **cursor)
             head = next;
         }
         curr = next;
-        (*cursor)++;
     }
     assert_type(head->car, SYMBOL);
     return head;
@@ -546,7 +550,7 @@ tlisp_obj_t **read(char *raw, size_t *n)
         if (whitespace(c)) {
             raw++;
         } else if (c == '(') {
-            tlisp_obj_t *form = read_form(&raw);
+            tlisp_obj_t *form = read_list(&raw);
             if (!form) {
                 fprintf(stderr, "ERROR: Empty form.\n");
                 exit(1);
