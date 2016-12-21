@@ -5,30 +5,29 @@
 #include <stdlib.h>
 #include <string.h>
 
-int whitespace(char c)
-{
-    return c == ' ' || c == '\t' || c == '\n';
-}
-
 enum obj_tag_t {
+    BOOL,
     NUM,
     STRING,
     SYMBOL,
     FORM,
     CONS,
-    FUNC,
+    NFUNC,
+    LAMBDA,
     NIL
 };
 
 const char *tag_str(enum obj_tag_t t)
 {
     switch (t) {
+    case BOOL: return "BOOL";
     case NUM: return "NUM";
     case STRING: return "STRING";
     case SYMBOL: return "SYMBOL";
     case FORM: return "FORM";
-    case FUNC: return "FUNC";
+    case NFUNC: return "NFUNC";
     case CONS: return "CONS";
+    case LAMBDA: return "LAMBDA";
     case NIL: return "NIL";
     }
 }
@@ -54,7 +53,6 @@ typedef struct env_t {
 size_t str_hash(const char *s)
 {
     size_t hash = 5381;
-
     while (*s) {
         hash = (hash << 5) + hash + *s;
         s++;
@@ -62,17 +60,38 @@ size_t str_hash(const char *s)
     return hash;
 }
 
-void env_init(env_t *env)
+void env_zero(env_t *env, int low, int high)
 {
     int i;
-    
-    env->symtab.len = 0;
-    env->symtab.cap = 16;
-    env->symtab.entries = malloc(sizeof(symtab_entry_t) * env->symtab.cap);
-    for (i = 0; i < env->symtab.cap; i++) {
+    for (i = low; i < high; i++) {
         env->symtab.entries[i].sym = NULL;
         env->symtab.entries[i].obj = NULL;
     }
+}
+
+void env_add(env_t *env, const char *sym, struct tlisp_obj_t *obj);
+void env_grow(env_t *env)
+{
+    int i;
+    symtab_entry_t *old = env->symtab.entries;
+    
+    env->symtab.cap *= 2;
+    env->symtab.entries = malloc(sizeof(symtab_entry_t) * env->symtab.cap);
+    env_zero(env, 0, env->symtab.cap);
+    for (i = 0; i < env->symtab.cap / 2; i++) {
+        if (old[i].sym) {
+            env_add(env, old[i].sym, old[i].obj);
+        }
+    }
+    free(old);
+}
+
+void env_init(env_t *env)
+{
+    env->symtab.len = 0;
+    env->symtab.cap = 16;
+    env->symtab.entries = malloc(sizeof(symtab_entry_t) * env->symtab.cap);
+    env_zero(env, 0, env->symtab.cap);
     env->outer = NULL;
 }
 
@@ -82,8 +101,7 @@ void env_add(env_t *env, const char *sym, struct tlisp_obj_t *obj)
     symtab_entry_t *entries = env->symtab.entries;
 
     if (env->symtab.len >= ((env->symtab.cap * 3) / 4)) {
-        env->symtab.cap *= 2;
-        env->symtab.entries = realloc(env->symtab.entries, env->symtab.cap);
+        env_grow(env);
         entries = env->symtab.entries;
     }
     while (entries[idx].sym) {
@@ -116,6 +134,16 @@ struct tlisp_obj_t *env_find(env_t *env, const char *sym)
     return NULL;
 }
 
+struct tlisp_obj_t *env_find_bang(env_t *env, const char *sym)
+{
+    struct tlisp_obj_t *obj = env_find(env, sym);
+    if (!obj) {
+        fprintf(stderr, "ERROR: Undefined symbol '%s'.\n", sym);
+        exit(1);
+    }
+    return obj;
+}
+
 typedef struct tlisp_obj_t *(*tlisp_fn)(struct tlisp_obj_t*, env_t*);
 
 typedef struct tlisp_obj_t {
@@ -132,86 +160,289 @@ typedef struct tlisp_obj_t {
     enum obj_tag_t tag;
 } tlisp_obj_t;
 
+/* TODO: REMOVE EXTRA FORWARD DECL. */
+tlisp_obj_t *tlisp_true; 
+void obj_str(tlisp_obj_t *obj, char *str, size_t maxlen)
+{
+    switch (obj->tag) {
+    case BOOL:
+        snprintf(str, maxlen, "<bool %s>", obj == tlisp_true ? "true" : "false");
+        break;
+    case NUM:
+        snprintf(str, maxlen, "<num %d>", obj->num);
+        break;
+    case STRING:
+        snprintf(str, maxlen, "<string \"%s\">", obj->str);
+        break;
+    case SYMBOL:
+        snprintf(str, maxlen, "<symbol %s>", obj->sym);
+        break;
+    case FORM:
+        strncpy(str, "<form>", maxlen);
+        break;
+    case CONS:
+        strncpy(str, "<cons>", maxlen);
+        break;
+    case NFUNC:
+        strncpy(str, "<native func>", maxlen);
+        break;
+    case LAMBDA:
+        strncpy(str, "<lambda>", maxlen);
+    case NIL:
+        strncpy(str, "<nil>", maxlen);
+        break;
+    }
+}
+
+void assert_type(tlisp_obj_t *obj, enum obj_tag_t expected)
+{
+    if (obj->tag != expected) {
+        char objstr[128];
+        obj_str(obj, objstr, 128);
+        fprintf(stderr, "ERROR: Bad type for object %s. Expected %s.\n",
+                objstr, tag_str(expected));
+        exit(1);
+    }
+}
+
+tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *env);
+void eval_args(tlisp_obj_t *args, env_t *env)
+{
+    while (args) {
+        args->car = eval(args->car, env);
+        args = args->cdr;
+    }
+}
+
 tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *env)
 {
     switch (obj->tag) {
+    case BOOL:
+        return obj;
     case NUM:
         return obj;
     case STRING:
         return obj;
-    case SYMBOL:
-        return env_find(env, obj->sym);
+    case SYMBOL: {
+        return env_find_bang(env, obj->sym);
+    }
     case FORM: {
-        tlisp_obj_t *fn_obj;
-
-        if (obj->car->tag != SYMBOL) {
-            fprintf(stderr, "ERROR: Misplaced symbol. Expecting function.\n");
-            exit(1);
-        }
-        fn_obj = env_find(env, obj->car->sym);
-        if (!fn_obj) {
-            fprintf(stderr, "ERROR: No function %s\n.", obj->car->sym);
-            exit(1);
-        }
+        tlisp_obj_t *fn_obj = env_find_bang(env, obj->car->sym);
+        eval_args(obj->cdr, env);
         return fn_obj->fn(obj->cdr, env);
     }
+    case CONS:
+        return 0;
+    case NFUNC:
+        return 0;
+    case LAMBDA:
+        return 0;
+    case NIL:
+        return obj;
     }
 }
 
-tlisp_obj_t *tlisp_nil;
-
-tlisp_obj_t *tlisp_print(tlisp_obj_t *obj, env_t *env)
+int nargs(tlisp_obj_t *args)
 {
-    if (!obj) {
-        printf("\n");
-        return tlisp_nil;
+    int a = 0;
+    while (args) {
+        a++;
+        args = args->cdr;
     }
-    switch (obj->tag) {
-    case NUM:
-        printf("%d\n", obj->num);
-        break;
-    case STRING:
-        printf("%s\n", obj->str);
-        break;
-    case SYMBOL:
-        tlisp_print(env_find(env, obj->sym), env);
-        break;
-    case FORM:
-        tlisp_print(eval(obj, env), env);
-        break;
-    case CONS: {
-        tlisp_print(obj->car, env);
-        if (obj->cdr)
-            tlisp_print(obj->cdr, env);
-        break;
+    return a;
+}
+
+void assert_nargs(int n, tlisp_obj_t *args)
+{
+    int a = nargs(args);
+    if (a != n) {
+        fprintf(stderr, "ERROR: Wrong number of arguments. Got %d. Expected %d",
+                a, n);
+        exit(1);
     }
-    case FUNC:
-        printf("<func>\n");
-        break;
-    case NIL:
-        printf("<nil>\n");
-        break;
+}
+
+tlisp_obj_t *arg_at(int idx, tlisp_obj_t *args)
+{
+    int i = 0;
+    while (i < idx) {
+        args = args->cdr;
+    }
+    return args->car;
+}
+
+/* BUILTINS */
+
+tlisp_obj_t *tlisp_nil;
+tlisp_obj_t *tlisp_true;
+tlisp_obj_t *tlisp_false;
+
+#define DEF_ARITH_OP(name, op)                                 \
+    tlisp_obj_t *tlisp_##name(tlisp_obj_t *arg, env_t *env)    \
+    {                                                          \
+        if (arg->tag == NUM) {                                 \
+            return arg;                                        \
+        } else {                                               \
+            tlisp_obj_t *res;                                  \
+            assert_type(arg->car, NUM);                        \
+            res = malloc(sizeof(tlisp_obj_t));                 \
+            res->tag = NUM;                                    \
+            res->num = arg->car->num;                          \
+            while ((arg = arg->cdr)) {                         \
+                assert_type(arg->car, NUM);                    \
+                res->num op##= arg->car->num;                  \
+            }                                                  \
+            return res;                                        \
+        }                                                      \
+    }                                                          \
+
+DEF_ARITH_OP(add, +)
+DEF_ARITH_OP(sub, -)
+DEF_ARITH_OP(mul, *)
+DEF_ARITH_OP(div, /)
+DEF_ARITH_OP(arith_and, &)
+DEF_ARITH_OP(arith_or, |)
+DEF_ARITH_OP(xor, ^)
+
+#define DEF_CMP_OP(name, op)                                    \
+    tlisp_obj_t *tlisp_##name(tlisp_obj_t *args, env_t *env)    \
+    {                                                           \
+        int a, b;                                               \
+        assert_nargs(2, args);                                  \
+        assert_type(arg_at(0, args), NUM);                      \
+        assert_type(arg_at(1, args), NUM);                      \
+        a = arg_at(0, args)->num;                               \
+        b = arg_at(1, args)->num;                               \
+        return (a op b) ? tlisp_true : tlisp_false;            \
+    }                                                           \
+
+DEF_CMP_OP(equals, ==)
+DEF_CMP_OP(greater_than, >)
+DEF_CMP_OP(less_than, <)
+DEF_CMP_OP(geq, >=)
+DEF_CMP_OP(leq, <=)
+
+int true_bool(tlisp_obj_t *obj)
+{
+    return obj == tlisp_true ? 1 : 0;
+}
+
+/* TODO: Be more flexible in arg types and number. */
+#define DEF_BOOL_OP(name, op)                                           \
+    tlisp_obj_t *tlisp_##name(tlisp_obj_t *args, env_t *env)            \
+    {                                                                   \
+        int p, q;                                                       \
+        assert_nargs(2, args);                                          \
+        assert_type(arg_at(0, args), BOOL);                             \
+        assert_type(arg_at(1, args), BOOL);                             \
+        p = true_bool(arg_at(0, args));                                 \
+        q = true_bool(arg_at(1, args));                                 \
+        return (p op q) ? tlisp_true : tlisp_false;                     \
+    }                                                                   \
+    
+DEF_BOOL_OP(and, &&)
+DEF_BOOL_OP(or, ||)
+
+tlisp_obj_t *tlisp_not(tlisp_obj_t *args, env_t *env)
+{
+    assert_nargs(1, args);
+    assert_type(arg_at(0, args), BOOL);
+    return arg_at(0, args) == tlisp_true ?
+        tlisp_false : tlisp_true; 
+}
+
+tlisp_obj_t *tlisp_def(tlisp_obj_t *args, env_t *env)
+{
+    return 0;
+}
+
+tlisp_obj_t *tlisp_set(tlisp_obj_t *args, env_t *env)
+{
+    return 0;
+}
+
+tlisp_obj_t *tlisp_cons(tlisp_obj_t *args, env_t *env)
+{
+    return 0;
+}
+
+tlisp_obj_t *tlisp_car(tlisp_obj_t *args, env_t *env)
+{
+    return 0;
+}
+
+tlisp_obj_t *tlisp_cdr(tlisp_obj_t *args, env_t *env)
+{
+    return 0;
+}
+
+tlisp_obj_t *tlisp_print(tlisp_obj_t *args, env_t *env)
+{
+    while (args) {
+        char str[256];
+        obj_str(args->car, str, 256);
+        printf("%s\n", str);
+        args = args->cdr;
     }
     return tlisp_nil;
 }
+
+#define REGISTER_NFUNC(sym, func)                      \
+    do {                                               \
+        tlisp_obj_t *f = malloc(sizeof(tlisp_obj_t));  \
+        f->fn = func;                                  \
+        f->tag = NFUNC;                                \
+        env_add(genv, sym, f);                         \
+    } while (0);                                       \
 
 void init_genv(env_t *genv)
 {
     env_init(genv);
     {
-        tlisp_obj_t *pr = malloc(sizeof(tlisp_obj_t));
-        pr->fn = tlisp_print;
-        pr->tag = FUNC;
-        env_add(genv, "print", pr);
-    }
-    {
         tlisp_nil = malloc(sizeof(tlisp_obj_t));
         tlisp_nil->tag = NIL;
         env_add(genv, "nil", tlisp_nil);
     }
+    {
+        tlisp_true = malloc(sizeof(tlisp_obj_t));
+        tlisp_true->tag = BOOL;
+        env_add(genv, "true", tlisp_true);
+    }
+    {
+        tlisp_false = malloc(sizeof(tlisp_obj_t));
+        tlisp_false->tag = BOOL;
+        env_add(genv, "false", tlisp_false); 
+    }
+    REGISTER_NFUNC("+", tlisp_add);
+    REGISTER_NFUNC("-", tlisp_sub);
+    REGISTER_NFUNC("*", tlisp_mul);
+    REGISTER_NFUNC("/", tlisp_div);
+    REGISTER_NFUNC("&", tlisp_arith_and);
+    REGISTER_NFUNC("|", tlisp_arith_or);
+    REGISTER_NFUNC("^", tlisp_xor);
+    REGISTER_NFUNC("eq", tlisp_equals);
+    REGISTER_NFUNC(">", tlisp_greater_than);
+    REGISTER_NFUNC("<", tlisp_less_than);
+    REGISTER_NFUNC(">=", tlisp_geq);
+    REGISTER_NFUNC("<=", tlisp_leq);
+    REGISTER_NFUNC("and", tlisp_and);
+    REGISTER_NFUNC("or", tlisp_or);
+    REGISTER_NFUNC("def", tlisp_def);
+    REGISTER_NFUNC("set!", tlisp_set);
+    REGISTER_NFUNC("cons", tlisp_cons);
+    REGISTER_NFUNC("car", tlisp_car);
+    REGISTER_NFUNC("cdr", tlisp_cdr);
+    REGISTER_NFUNC("print", tlisp_print);
 }
 
-tlisp_obj_t *parse_num(char **cursor)
+/* READER */
+
+int whitespace(char c)
+{
+    return c == ' ' || c == '\t' || c == '\n';
+}
+
+tlisp_obj_t *read_num(char **cursor)
 {
     tlisp_obj_t *obj = malloc(sizeof(tlisp_obj_t));
     int f = 0;
@@ -226,7 +457,7 @@ tlisp_obj_t *parse_num(char **cursor)
     return obj;
 }
 
-tlisp_obj_t *parse_str(char **cursor)
+tlisp_obj_t *read_str(char **cursor)
 {
     tlisp_obj_t *obj = malloc(sizeof(tlisp_obj_t));
     char *lead;
@@ -245,7 +476,7 @@ tlisp_obj_t *parse_str(char **cursor)
     return obj;
 }
 
-tlisp_obj_t *parse_sym(char **cursor)
+tlisp_obj_t *read_sym(char **cursor)
 {
     tlisp_obj_t *obj = malloc(sizeof(tlisp_obj_t));
     char *lead = *cursor;
@@ -263,7 +494,7 @@ tlisp_obj_t *parse_sym(char **cursor)
     return obj;
 }
 
-tlisp_obj_t *parse_form(char **cursor)
+tlisp_obj_t *read_form(char **cursor)
 {
     tlisp_obj_t *head = NULL;
     tlisp_obj_t *curr, *next;
@@ -283,13 +514,13 @@ tlisp_obj_t *parse_form(char **cursor)
         next->cdr = NULL;
         next->tag = head ? CONS : FORM;
         if (c == '"') {
-            next->car = parse_str(cursor);
+            next->car = read_str(cursor);
         } else if (isdigit(c)) {
-            next->car = parse_num(cursor);
+            next->car = read_num(cursor);
        } else if (c == '(') {
-            next->car = parse_form(cursor);
+            next->car = read_form(cursor);
         } else {
-            next->car = parse_sym(cursor);
+            next->car = read_sym(cursor);
         }
         if (head) {
             curr->cdr = next;
@@ -300,10 +531,11 @@ tlisp_obj_t *parse_form(char **cursor)
         (*cursor)++;
     }
     (*cursor)++;
+    assert_type(head->car, SYMBOL);
     return head;
 }
 
-tlisp_obj_t **parse(char *raw, size_t *n)
+tlisp_obj_t **read(char *raw, size_t *n)
 {
     size_t len = 0;
     size_t cap = 128;
@@ -314,7 +546,7 @@ tlisp_obj_t **parse(char *raw, size_t *n)
         if (whitespace(c)) {
             ;
         } else if (c == '(') {
-            tlisp_obj_t *form = parse_form(&raw);
+            tlisp_obj_t *form = read_form(&raw);
             if (!form) {
                 fprintf(stderr, "ERROR: Empty form.\n");
                 exit(1);
@@ -326,9 +558,10 @@ tlisp_obj_t **parse(char *raw, size_t *n)
             forms[len] = form;
             len++;
         } else {
-            fprintf(stderr, "ERROR: Unexpected symbol %c\n", c);
+            fprintf(stderr, "ERROR: Unexpected symbol '%c'\n", c);
             exit(1);
         }
+        printf("%c\n", c);
         raw++;
     }
     *n = len;
@@ -362,6 +595,7 @@ char *read_file(const char *fname)
 int tlisp_repl(env_t *genv)
 {
     char line[256];
+    char res_str[256];
     tlisp_obj_t **in;
     tlisp_obj_t *res;
     size_t len;
@@ -370,12 +604,13 @@ int tlisp_repl(env_t *genv)
         printf("tlisp> ");
         fflush(stdout);
         fgets(line, 256, stdin);
-        in = parse(line, &len);
+        in = read(line, &len);
         if (len == 0) {
             continue;
         }
         res = eval(in[0], genv);
-        tlisp_print(res, genv); 
+        obj_str(res, res_str, 256);
+        printf("%s\n", res_str); 
     }
     return 0;
 }
@@ -414,7 +649,7 @@ int main(int argc, char **argv)
     } else {
         char *buff = read_file(argv[1]);
         size_t len;
-        parse(buff, &len);
+        read(buff, &len);
     }
     return 0;
 }
