@@ -61,6 +61,29 @@ void env_add(env_t *env, const char *sym, tlisp_obj_t *obj)
     env->symtab.len++;
 }
 
+void env_update(env_t *env, const char *sym, tlisp_obj_t *obj)
+{
+    size_t idx = str_hash(sym) % env->symtab.cap;
+    symtab_entry_t *entries = env->symtab.entries;
+    size_t start = idx;
+
+    while (entries[idx].sym) {
+        if (!strcmp(sym, entries[idx].sym)) {
+            entries[idx].sym = sym;
+            entries[idx].obj = obj;
+            return;
+        }
+        idx = (idx + 1) % env->symtab.cap;
+        if (idx == start) {
+            break;
+        }
+    }
+    fprintf(stderr,
+            "ERROR: Cannot update %s. No previous definition exists.\n",
+            sym);
+    exit(1);
+}
+
 tlisp_obj_t *env_find(env_t *env, const char *sym)
 {
     size_t hash = str_hash(sym);
