@@ -32,8 +32,8 @@ typedef struct tlisp_obj_t {
     };
     enum obj_tag_t tag;
 } tlisp_obj_t;
-void obj_str(tlisp_obj_t *, char *out, size_t maxlen);
 
+void obj_str(tlisp_obj_t *, char *out, size_t maxlen);
 tlisp_obj_t *new_num(void);
 tlisp_obj_t *new_str(void);
 tlisp_obj_t *new_sym(void);

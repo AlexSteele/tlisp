@@ -61,30 +61,7 @@ void env_add(env_t *env, const char *sym, tlisp_obj_t *obj)
     env->symtab.len++;
 }
 
-void env_update(env_t *env, const char *sym, tlisp_obj_t *obj)
-{
-    size_t idx = str_hash(sym) % env->symtab.cap;
-    symtab_entry_t *entries = env->symtab.entries;
-    size_t start = idx;
-
-    while (entries[idx].sym) {
-        if (!strcmp(sym, entries[idx].sym)) {
-            entries[idx].sym = sym;
-            entries[idx].obj = obj;
-            return;
-        }
-        idx = (idx + 1) % env->symtab.cap;
-        if (idx == start) {
-            break;
-        }
-    }
-    fprintf(stderr,
-            "ERROR: Cannot update %s. No previous definition exists.\n",
-            sym);
-    exit(1);
-}
-
-tlisp_obj_t *env_find(env_t *env, const char *sym)
+symtab_entry_t *env_find_internal(env_t *env, const char *sym)
 {
     size_t hash = str_hash(sym);
     
@@ -93,7 +70,7 @@ tlisp_obj_t *env_find(env_t *env, const char *sym)
         size_t idx = hash % env->symtab.cap;
         while (entries[idx].sym) {
             if (!strcmp(entries[idx].sym, sym)) {
-                return entries[idx].obj;
+                return &entries[idx];
             }
             idx = (idx + 1) % env->symtab.cap;
         }
@@ -102,12 +79,32 @@ tlisp_obj_t *env_find(env_t *env, const char *sym)
     return NULL;
 }
 
+tlisp_obj_t *env_find(env_t *env, const char *sym)
+{
+    symtab_entry_t *entry = env_find_internal(env, sym);
+    return entry ? entry->obj : NULL;
+}
+
 tlisp_obj_t *env_find_bang(env_t *env, const char *sym)
 {
-    struct tlisp_obj_t *obj = env_find(env, sym);
+    tlisp_obj_t *obj = env_find(env, sym);
+    
     if (!obj) {
         fprintf(stderr, "ERROR: Undefined symbol '%s'.\n", sym);
         exit(1);
     }
     return obj;
+}
+
+void env_update(env_t *env, const char *sym, tlisp_obj_t *obj)
+{
+    symtab_entry_t *entry = env_find_internal(env, sym);
+
+    if (!entry) {
+        fprintf(stderr,
+                "ERROR: Cannot update %s. No previous definition.\n",
+                sym);
+        exit(1);
+    }
+    entry->obj = obj;
 }
