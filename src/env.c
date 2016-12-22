@@ -40,7 +40,7 @@ void env_init(env_t *env)
     env->outer = NULL;
 }
 
-void env_add(env_t *env, const char *sym, struct obj_t *obj)
+void env_add(env_t *env, const char *sym, tlisp_obj_t *obj)
 {
     size_t idx = str_hash(sym) % env->symtab.cap;
     symtab_entry_t *entries = env->symtab.entries;

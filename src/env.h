@@ -20,7 +20,7 @@ typedef struct env_t {
 } env_t;
 
 void env_init(env_t *);
-void env_add(env_t *, const char *sym, struct tlisp_obj_t *);
+void env_add(env_t *, const char *sym, tlisp_obj_t *);
 tlisp_obj_t *env_find(env_t *, const char *sym);
 tlisp_obj_t *env_find_bang(env_t *, const char *sym);
 

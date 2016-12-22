@@ -139,7 +139,17 @@ tlisp_obj_t *tlisp_while(tlisp_obj_t *args, env_t *env)
 
 tlisp_obj_t *tlisp_def(tlisp_obj_t *args, env_t *env)
 {
-    return 0;
+    tlisp_obj_t *sym;
+    tlisp_obj_t *val;
+    
+    assert_nargs(2, args);
+    sym = arg_at(0, args);
+    val = arg_at(1, args);
+    assert_type(sym, SYMBOL);
+
+    val = tlisp_eval(val, env);
+    env_add(env, sym->sym, val);
+    return val;
 }
 
 tlisp_obj_t *tlisp_set(tlisp_obj_t *args, env_t *env)
