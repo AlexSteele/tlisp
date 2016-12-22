@@ -1,6 +1,5 @@
 
 #include "env.h"
-#include "builtins.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -88,52 +87,4 @@ tlisp_obj_t *env_find_bang(env_t *env, const char *sym)
         exit(1);
     }
     return obj;
-}
-
-#define REGISTER_NFUNC(sym, func)                      \
-    do {                                               \
-        tlisp_obj_t *f = malloc(sizeof(tlisp_obj_t));  \
-        f->fn = func;                                  \
-        f->tag = NFUNC;                                \
-        env_add(genv, sym, f);                         \
-    } while (0);                                       \
-
-void init_genv(env_t *genv)
-{
-    env_init(genv);
-    {
-        tlisp_nil = malloc(sizeof(tlisp_obj_t));
-        tlisp_nil->tag = NIL;
-        env_add(genv, "nil", tlisp_nil);
-    }
-    {
-        tlisp_true = malloc(sizeof(tlisp_obj_t));
-        tlisp_true->tag = BOOL;
-        env_add(genv, "true", tlisp_true);
-    }
-    {
-        tlisp_false = malloc(sizeof(tlisp_obj_t));
-        tlisp_false->tag = BOOL;
-        env_add(genv, "false", tlisp_false); 
-    }
-    REGISTER_NFUNC("+", tlisp_add);
-    REGISTER_NFUNC("-", tlisp_sub);
-    REGISTER_NFUNC("*", tlisp_mul);
-    REGISTER_NFUNC("/", tlisp_div);
-    REGISTER_NFUNC("&", tlisp_arith_and);
-    REGISTER_NFUNC("|", tlisp_arith_or);
-    REGISTER_NFUNC("^", tlisp_xor);
-    REGISTER_NFUNC("eq", tlisp_equals);
-    REGISTER_NFUNC(">", tlisp_greater_than);
-    REGISTER_NFUNC("<", tlisp_less_than);
-    REGISTER_NFUNC(">=", tlisp_geq);
-    REGISTER_NFUNC("<=", tlisp_leq);
-    REGISTER_NFUNC("and", tlisp_and);
-    REGISTER_NFUNC("or", tlisp_or);
-    REGISTER_NFUNC("def", tlisp_def);
-    REGISTER_NFUNC("set!", tlisp_set);
-    REGISTER_NFUNC("cons", tlisp_cons);
-    REGISTER_NFUNC("car", tlisp_car);
-    REGISTER_NFUNC("cdr", tlisp_cdr);
-    REGISTER_NFUNC("print", tlisp_print);
 }

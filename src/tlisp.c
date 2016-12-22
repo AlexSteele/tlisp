@@ -1,4 +1,5 @@
 
+#include "builtins.h"
 #include "core.h"
 #include "env.h"
 #include "read.h"
@@ -6,39 +7,59 @@
 #include <stdlib.h>
 #include <string.h>
 
-tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *env);
-void eval_args(tlisp_obj_t *args, env_t *env)
-{
-    while (args) {
-        args->car = eval(args->car, env);
-        args = args->cdr;
-    }
-}
+#define REGISTER_NFUNC(sym, func)                      \
+    do {                                               \
+        tlisp_obj_t *f = malloc(sizeof(tlisp_obj_t));  \
+        f->fn = func;                                  \
+        f->tag = NFUNC;                                \
+        env_add(genv, sym, f);                         \
+    } while (0);                                       \
 
-tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *env)
+static
+void init_genv(env_t *genv)
 {
-    // TODO: FINISH IMPL
-    switch (obj->tag) {
-    case BOOL:
-        return obj;
-    case NUM:
-        return obj;
-    case STRING:
-        return obj;
-    case SYMBOL: 
-        return env_find_bang(env, obj->sym);
-    case CONS: {
-        tlisp_obj_t *fn_obj = env_find_bang(env, obj->car->sym);
-        eval_args(obj->cdr, env);
-        return fn_obj->fn(obj->cdr, env);
+    env_init(genv);
+    {
+        tlisp_nil = malloc(sizeof(tlisp_obj_t));
+        tlisp_nil->tag = NIL;
+        env_add(genv, "nil", tlisp_nil);
     }
-    case NFUNC:
-        return 0;
-    case LAMBDA:
-        return 0;
-    case NIL:
-        return obj;
+    {
+        tlisp_true = malloc(sizeof(tlisp_obj_t));
+        tlisp_true->tag = BOOL;
+        tlisp_true->num = 1;
+        env_add(genv, "true", tlisp_true);
     }
+    {
+        tlisp_false = malloc(sizeof(tlisp_obj_t));
+        tlisp_false->tag = BOOL;
+        tlisp_false->num = 0;
+        env_add(genv, "false", tlisp_false); 
+    }
+    REGISTER_NFUNC("do", tlisp_do);
+    REGISTER_NFUNC("if", tlisp_if);
+    REGISTER_NFUNC("while", tlisp_while);
+    REGISTER_NFUNC("def", tlisp_def);
+    REGISTER_NFUNC("set!", tlisp_set);
+    REGISTER_NFUNC("cons", tlisp_cons);
+    REGISTER_NFUNC("car", tlisp_car);
+    REGISTER_NFUNC("cdr", tlisp_cdr);
+    REGISTER_NFUNC("+", tlisp_add);
+    REGISTER_NFUNC("-", tlisp_sub);
+    REGISTER_NFUNC("*", tlisp_mul);
+    REGISTER_NFUNC("/", tlisp_div);
+    REGISTER_NFUNC("&", tlisp_arith_and);
+    REGISTER_NFUNC("|", tlisp_arith_or);
+    REGISTER_NFUNC("^", tlisp_xor);
+    REGISTER_NFUNC("eq", tlisp_equals);
+    REGISTER_NFUNC(">", tlisp_greater_than);
+    REGISTER_NFUNC("<", tlisp_less_than);
+    REGISTER_NFUNC(">=", tlisp_geq);
+    REGISTER_NFUNC("<=", tlisp_leq);
+    REGISTER_NFUNC("and", tlisp_and);
+    REGISTER_NFUNC("or", tlisp_or);
+    REGISTER_NFUNC("not", tlisp_not);
+    REGISTER_NFUNC("print", tlisp_print);
 }
 
 static
@@ -83,9 +104,23 @@ int tlisp_repl(env_t *genv)
         if (len == 0) {
             continue;
         }
-        res = eval(in[0], genv);
+        res = tlisp_eval(in[0], genv);
         obj_str(res, res_str, 256);
         printf("%s\n", res_str); 
+    }
+    return 0;
+}
+
+static
+int tlisp_file(const char *fname, env_t *genv)
+{
+    char *buff = read_file(fname);
+    size_t i;
+    size_t len;
+    tlisp_obj_t **forms = read(buff, &len);
+        
+    for (i = 0; i < len; i++) {
+        tlisp_eval(forms[i], genv);
     }
     return 0;
 }
@@ -122,10 +157,6 @@ int main(int argc, char **argv)
     init_genv(&genv);
     if (interactive) {
         return tlisp_repl(&genv);
-    } else {
-        char *buff = read_file(argv[1]);
-        size_t len;
-        read(buff, &len);
-    }
-    return 0;
+    } 
+    return tlisp_file(argv[1], &genv);
 }
