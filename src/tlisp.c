@@ -41,19 +41,20 @@ tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *env)
     }
 }
 
+static
 char *read_file(const char *fname)
 {
     size_t cap = 8192;
     size_t len = 0;
     char *buff = malloc(sizeof(char) * cap);
     FILE *fin = fopen(fname, "r");
+    char c;
     
     if (!fin) {
         fprintf(stderr, "ERROR: Unable to open %s.\n", fname);
         exit(1);
     }
-    while (!feof(fin)) {
-        char c = fgetc(fin);
+    while ((c = fgetc(fin)) != EOF) {
         if (len == cap) {
             cap *= 2;
             buff = realloc(buff, sizeof(char) * cap); 
@@ -65,6 +66,7 @@ char *read_file(const char *fname)
     return buff;
 }
 
+static
 int tlisp_repl(env_t *genv)
 {
     char line[256];
@@ -88,6 +90,7 @@ int tlisp_repl(env_t *genv)
     return 0;
 }
 
+static
 void print_usage(const char *progname)
 {
     printf("USAGE: %s [options] [file]\n", progname);

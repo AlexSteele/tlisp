@@ -5,39 +5,90 @@
 #include <stdlib.h>
 #include <string.h>
 
+static
 int whitespace(char c)
 {
-    return c == ' ' || c == '\t' || c == '\n';
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r';
 }
+
+static
+void copy_line(char *src, char *dest, size_t maxlen)
+{
+    int i = 0;
+    
+    while (*src && i < maxlen - 1) {
+        dest[i] = *src;
+        if (*src == '\n' || *src == '\r') {
+            break;
+        }
+        src++;
+        i++;
+    }
+    dest[i] = 0;
+}
+
+#define MAX_LINE 256
 
 typedef struct read_state {
     int line;
     int col;
-    char *cursor; 
+    char curr_line[MAX_LINE];
+    char *cursor;
 } read_state;
 
+static
 void reader_init(read_state *reader, char *source)
 {
     reader->line = 1;
     reader->col = 1;
     reader->cursor = source;
+    copy_line(source, reader->curr_line, MAX_LINE);
 }
 
+static
 void reader_adv(read_state *reader)
 {
     if (*reader->cursor == '\n') {
         reader->line++;
-        reader->col = 0;
+        reader->col = 1;
+        copy_line(reader->cursor + 1, reader->curr_line, MAX_LINE);
+    } else {
+        reader->col++;
     }
     reader->cursor++;
-    reader->col++;
 }
 
+static
 void reader_adv_n(read_state *reader, int n)
 {
-    reader->cursor += n;
+    int i;
+    for (i = 0; i < n; i++) {
+        reader_adv(reader);
+    }
 }
 
+static
+char *reader_pos_str(read_state *reader, char *str, size_t maxlen)
+{
+    int len;
+    int len_with_arrow;
+
+    snprintf(str, maxlen, "Line %d Column %d\n%s\n",
+             reader->line, reader->col, reader->curr_line);
+    len = strlen(str);
+    len_with_arrow = len + reader->col + 1;
+    if (len_with_arrow <= maxlen) {
+        char *end = str + len; 
+        if (reader->col > 1) {
+            memset(end, ' ', reader->col - 1);            
+        }
+        end[reader->col - 1] = '^';
+        end[reader->col] = 0;
+    }
+    return str;
+}
+
+static
 tlisp_obj_t *read_num(read_state *reader)
 {
     tlisp_obj_t *obj = new_num();
@@ -53,6 +104,7 @@ tlisp_obj_t *read_num(read_state *reader)
     return obj;
 }
 
+static
 tlisp_obj_t *read_str(read_state *reader)
 {
     tlisp_obj_t *obj = new_str();
@@ -70,6 +122,7 @@ tlisp_obj_t *read_str(read_state *reader)
     return obj;
 }
 
+static
 tlisp_obj_t *read_sym(read_state *reader)
 {
     tlisp_obj_t *obj = new_sym();
@@ -85,6 +138,7 @@ tlisp_obj_t *read_sym(read_state *reader)
     return obj;
 }
 
+static
 tlisp_obj_t *read_list(read_state *reader)
 {
     tlisp_obj_t *head = NULL;
@@ -92,6 +146,10 @@ tlisp_obj_t *read_list(read_state *reader)
     char c;
 
     reader_adv(reader);
+    if (*reader->cursor == ')') {
+        reader_adv(reader);
+        return tlisp_nil;
+    }
     while ((c = *reader->cursor)) {
         if (whitespace(c)) {
             reader_adv(reader);
@@ -137,10 +195,6 @@ tlisp_obj_t **read(char *raw, size_t *n)
             reader_adv(&reader);
         } else if (c == '(') {
             tlisp_obj_t *form = read_list(&reader);
-            if (!form) {
-                fprintf(stderr, "ERROR: Empty form.\n");
-                exit(1);
-            }
             if (len == cap) {
                 cap *= 2;
                 forms = realloc(forms, sizeof(tlisp_obj_t*) * cap);
@@ -148,7 +202,9 @@ tlisp_obj_t **read(char *raw, size_t *n)
             forms[len] = form;
             len++;
         } else {
-            fprintf(stderr, "ERROR: Unexpected symbol '%c'\n", c);
+            char pos_str[256];
+            fprintf(stderr, "ERROR: Unexpected symbol '%c'.\n%s\n",
+                    c, reader_pos_str(&reader, pos_str, 256));
             exit(1);
         }
     }
