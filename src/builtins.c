@@ -82,8 +82,11 @@ tlisp_obj_t *tlisp_eval(tlisp_obj_t *args, env_t *env)
     case SYMBOL:
         return env_find_bang(env, args->sym);
     case CONS: {
-        tlisp_obj_t *fn = env_find_bang(env, args->car->sym);
-        tlisp_obj_t *fn_args = args->cdr;
+        tlisp_obj_t *fn, *fn_args;
+        assert_type(args->car, SYMBOL);
+        fn = env_find_bang(env, args->car->sym);
+        assert_type(fn, NFUNC);
+        fn_args = args->cdr;
         return fn->fn(fn_args, env);
     }
     case NFUNC:
