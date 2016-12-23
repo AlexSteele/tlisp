@@ -7,14 +7,14 @@
 const char *tag_str(enum obj_tag_t t)
 {
     switch (t) {
-    case BOOL: return "BOOL";
-    case NUM: return "NUM";
-    case STRING: return "STRING";
-    case SYMBOL: return "SYMBOL";
-    case NFUNC: return "NFUNC";
-    case CONS: return "CONS";
-    case LAMBDA: return "LAMBDA";
-    case NIL: return "NIL";
+    case BOOL: return "bool";
+    case NUM: return "num";
+    case STRING: return "string";
+    case SYMBOL: return "symbol";
+    case NFUNC: return "nfunc";
+    case CONS: return "cons";
+    case LAMBDA: return "lambda";
+    case NIL: return "nil";
     }
 }
 

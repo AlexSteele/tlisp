@@ -2,6 +2,7 @@
 #include "builtins.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static
 int is_true(tlisp_obj_t *obj)
@@ -82,6 +83,7 @@ tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *env)
     case CONS:
         return tlisp_apply(obj, env);
     case NFUNC:
+        return obj;
     case LAMBDA:
         fprintf(stderr, "ERROR: eval called on function.\n");
         exit(1);
@@ -117,6 +119,10 @@ tlisp_obj_t *apply(tlisp_obj_t *fn, tlisp_obj_t *args, env_t *env)
 tlisp_obj_t *tlisp_eval(tlisp_obj_t *args, env_t *env)
 {
     assert_nargs(1, args);
+    if (args->car->tag == CONS &&
+        args->car->car == tlisp_quote) {
+        return eval(args->car->cdr, env);
+    }
     return eval(args->car, env);
 }
 
@@ -141,6 +147,27 @@ tlisp_obj_t *tlisp_apply(tlisp_obj_t *args, env_t *env)
         inner_env.outer = env;
         return apply(fn, fn_args, &inner_env);
     }
+}
+
+tlisp_obj_t *tlisp_quote_fn(tlisp_obj_t *args, env_t *env)
+{
+    if (!args) {
+        fprintf(stderr, "ERROR: quote expects at least one argument.\n");
+        exit(1);
+    }
+    return args;
+}
+
+tlisp_obj_t *tlisp_type_of(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *res;
+    tlisp_obj_t *arg;
+    
+    assert_nargs(1, args);
+    arg = eval(args->car, env);
+    res = new_str();
+    res->str = strdup(tag_str(arg->tag));
+    return res;
 }
 
 tlisp_obj_t *tlisp_do(tlisp_obj_t *args, env_t *env)
