@@ -38,5 +38,6 @@ tlisp_obj_t *new_num(void);
 tlisp_obj_t *new_str(void);
 tlisp_obj_t *new_sym(void);
 tlisp_obj_t *new_cons(void);
+tlisp_obj_t *new_lambda(void);
 
 #endif

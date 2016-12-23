@@ -58,6 +58,7 @@ void obj_str(tlisp_obj_t *obj, char *str, size_t maxlen)
 DEF_CONSTRUCTOR(str, STRING)
 DEF_CONSTRUCTOR(sym, SYMBOL)
 DEF_CONSTRUCTOR(num, NUM)
+DEF_CONSTRUCTOR(lambda, LAMBDA)
 
 tlisp_obj_t *new_cons()
 {

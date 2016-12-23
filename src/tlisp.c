@@ -36,11 +36,13 @@ void init_genv(env_t *genv)
         tlisp_false->num = 0;
         env_add(genv, "false", tlisp_false); 
     }
+    REGISTER_NFUNC("apply", tlisp_apply);
     REGISTER_NFUNC("do", tlisp_do);
     REGISTER_NFUNC("if", tlisp_if);
     REGISTER_NFUNC("while", tlisp_while);
     REGISTER_NFUNC("def", tlisp_def);
     REGISTER_NFUNC("set!", tlisp_set);
+    REGISTER_NFUNC("lambda", tlisp_lambda);
     REGISTER_NFUNC("cons", tlisp_cons);
     REGISTER_NFUNC("car", tlisp_car);
     REGISTER_NFUNC("cdr", tlisp_cdr);
