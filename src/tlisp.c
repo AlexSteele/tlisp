@@ -110,7 +110,9 @@ int tlisp_repl(env_t *genv)
     while (1) {
         printf("tlisp> ");
         fflush(stdout);
-        fgets(line, 256, stdin);
+        if (!fgets(line, 256, stdin)) {
+            return 0;
+        }
         in = read(line, &len);
         if (len == 0) {
             continue;
@@ -119,7 +121,6 @@ int tlisp_repl(env_t *genv)
         obj_str(res, res_str, 256);
         printf("%s\n", res_str); 
     }
-    return 0;
 }
 
 static
