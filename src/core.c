@@ -41,6 +41,7 @@ void obj_str(tlisp_obj_t *obj, char *str, size_t maxlen)
         break;
     case LAMBDA:
         strncpy(str, "<lambda>", maxlen);
+        break;
     case NIL:
         strncpy(str, "<nil>", maxlen);
         break;

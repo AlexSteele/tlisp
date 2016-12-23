@@ -36,6 +36,7 @@ void init_genv(env_t *genv)
         tlisp_false->num = 0;
         env_add(genv, "false", tlisp_false); 
     }
+    REGISTER_NFUNC("eval", tlisp_eval);
     REGISTER_NFUNC("apply", tlisp_apply);
     REGISTER_NFUNC("do", tlisp_do);
     REGISTER_NFUNC("if", tlisp_if);
@@ -43,6 +44,7 @@ void init_genv(env_t *genv)
     REGISTER_NFUNC("def", tlisp_def);
     REGISTER_NFUNC("set!", tlisp_set);
     REGISTER_NFUNC("lambda", tlisp_lambda);
+    REGISTER_NFUNC("list", tlisp_list);
     REGISTER_NFUNC("cons", tlisp_cons);
     REGISTER_NFUNC("car", tlisp_car);
     REGISTER_NFUNC("cdr", tlisp_cdr);
@@ -106,7 +108,7 @@ int tlisp_repl(env_t *genv)
         if (len == 0) {
             continue;
         }
-        res = tlisp_eval(in[0], genv);
+        res = eval(in[0], genv);
         obj_str(res, res_str, 256);
         printf("%s\n", res_str); 
     }
@@ -122,7 +124,7 @@ int tlisp_file(const char *fname, env_t *genv)
     tlisp_obj_t **forms = read(buff, &len);
         
     for (i = 0; i < len; i++) {
-        tlisp_eval(forms[i], genv);
+        eval(forms[i], genv);
     }
     return 0;
 }

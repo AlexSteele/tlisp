@@ -69,37 +69,18 @@ tlisp_obj_t *arg_at(int idx, tlisp_obj_t *args)
     return args->car;
 }
 
-tlisp_obj_t *tlisp_eval(tlisp_obj_t *args, env_t *env)
+tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *env)
 {
-    switch (args->tag) {
+    switch (obj->tag) {
     case BOOL:
     case NUM:
     case STRING:
     case NIL:
-        return args;
+        return obj;
     case SYMBOL:
-        return env_find_bang(env, args->sym);
-    case CONS: {
-        tlisp_obj_t *fn, *fn_args;
-        
-        assert_type(args->car, SYMBOL);
-        fn = env_find_bang(env, args->car->sym);
-        fn_args = args->cdr;
-        if (fn->tag == NFUNC) {
-            return fn->fn(fn_args, env);
-        } else {
-            tlisp_obj_t fnlist;
-            env_t inner_env;
-
-            assert_type(fn, LAMBDA);
-            fnlist.tag = CONS;
-            fnlist.car = fn;
-            fnlist.cdr = fn_args;
-            env_init(&inner_env);
-            inner_env.outer = env;
-            return tlisp_apply(&fnlist, &inner_env);
-        }
-    }
+        return env_find_bang(env, obj->sym);
+    case CONS:
+        return tlisp_apply(obj, env);
     case NFUNC:
     case LAMBDA:
         fprintf(stderr, "ERROR: eval called on function.\n");
@@ -107,47 +88,65 @@ tlisp_obj_t *tlisp_eval(tlisp_obj_t *args, env_t *env)
     }
 }
 
-tlisp_obj_t *tlisp_apply(tlisp_obj_t *args, env_t *env)
+tlisp_obj_t *apply(tlisp_obj_t *fn, tlisp_obj_t *args, env_t *env)
 {
-    tlisp_obj_t *fn;
-    tlisp_obj_t *arg_list;
-    tlisp_obj_t *body;
-    tlisp_obj_t *fn_args;
+    tlisp_obj_t *arg_list = fn->car;
+    tlisp_obj_t *body = fn->cdr;
     tlisp_obj_t *res;
 
-    if (!args) {
-        fprintf(stderr, "ERROR: Apply requires at least one argument.");
-        exit(1);
-    }
-    fn = args->car;
-    arg_list = fn->car;
-    body = fn->cdr;
-    fn_args = args->cdr;
-    while (arg_list || fn_args) {
+    while (arg_list || args) {
         if (!arg_list) {
             fprintf(stderr, "ERROR: Too many arguments.\n");
             exit(1);
         }
-        if (!fn_args) {
-            fprintf(stderr, "Error: Too few arguments.\n");
+        if (!args) {
+            fprintf(stderr, "ERROR: Too few arguments.\n");
             exit(1);
         }
-        env_add(env, arg_list->car->sym, tlisp_eval(fn_args->car, env));
+        env_add(env, arg_list->car->sym, eval(args->car, env));
         arg_list = arg_list->cdr;
-        fn_args = fn_args->cdr;
+        args = args->cdr;
     }
     while (body) {
-        tlisp_obj_t *curr = tlisp_eval(body->car, env);
-        res = tlisp_eval(curr, env);
+        res = eval(body->car, env);
         body = body->cdr;
     }
     return res;
 }
 
+tlisp_obj_t *tlisp_eval(tlisp_obj_t *args, env_t *env)
+{
+    assert_nargs(1, args);
+    return eval(args->car, env);
+}
+
+tlisp_obj_t *tlisp_apply(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *fn;
+    tlisp_obj_t *fn_args;
+
+    if (!args) {
+        fprintf(stderr, "ERROR: Apply requires at least one argument.\n");
+        exit(1);
+    }
+    fn = eval(args->car, env);
+    fn_args = args->cdr;
+    if (fn->tag == NFUNC) {
+        return fn->fn(fn_args, env);
+    } else {
+        env_t inner_env;
+
+        assert_type(fn, LAMBDA);
+        env_init(&inner_env);
+        inner_env.outer = env;
+        return apply(fn, fn_args, &inner_env);
+    }
+}
+
 tlisp_obj_t *tlisp_do(tlisp_obj_t *args, env_t *env)
 {
     while (args) {
-        tlisp_eval(args->car, env);
+        eval(args->car, env);
         args = args->cdr;
     }
     return tlisp_nil;
@@ -161,11 +160,11 @@ tlisp_obj_t *tlisp_if(tlisp_obj_t *args, env_t *env)
         fprintf(stderr, "ERROR: Bad if. Wrong number of args (%d).\n", len);
         exit(1);
     }
-    if (is_true(tlisp_eval(arg_at(0, args), env))) {
-        return tlisp_eval(arg_at(1, args), env);
+    if (is_true(eval(arg_at(0, args), env))) {
+        return eval(arg_at(1, args), env);
     }
     if (len == 3) {
-        return tlisp_eval(arg_at(2, args), env);
+        return eval(arg_at(2, args), env);
     }
     return tlisp_nil;
 }
@@ -179,8 +178,8 @@ tlisp_obj_t *tlisp_while(tlisp_obj_t *args, env_t *env)
     cond = arg_at(0, args);
     body = arg_at(1, args);
 
-    while (is_true(tlisp_eval(cond, env))) {
-        tlisp_eval(body, env);
+    while (is_true(eval(cond, env))) {
+        eval(body, env);
     }
     return tlisp_nil;
 }
@@ -195,7 +194,7 @@ tlisp_obj_t *tlisp_def(tlisp_obj_t *args, env_t *env)
     val = arg_at(1, args);
     assert_type(sym, SYMBOL);
 
-    val = tlisp_eval(val, env);
+    val = eval(val, env);
     env_add(env, sym->sym, val);
     return val;
 }
@@ -210,7 +209,7 @@ tlisp_obj_t *tlisp_set(tlisp_obj_t *args, env_t *env)
     val = arg_at(1, args);
     assert_type(sym, SYMBOL);
 
-    val = tlisp_eval(val, env);
+    val = eval(val, env);
     env_update(env, sym->sym, val);
     return val;
 }
@@ -234,6 +233,11 @@ tlisp_obj_t *tlisp_lambda(tlisp_obj_t *args, env_t *env)
         args = args->cdr;
     }
     return res;
+}
+
+tlisp_obj_t *tlisp_list(tlisp_obj_t *args, env_t *env)
+{
+    return 0;
 }
 
 tlisp_obj_t *tlisp_cons(tlisp_obj_t *args, env_t *env)
@@ -264,10 +268,10 @@ tlisp_obj_t *tlisp_cdr(tlisp_obj_t *args, env_t *env)
         }                                                      \
         res = args->car->tag == NUM ?                          \
             num_cpy(args->car) :                               \
-            tlisp_eval(args->car, env);                        \
+            eval(args->car, env);                        \
         assert_type(res, NUM);                                 \
         while ((args = args->cdr)) {                           \
-            tlisp_obj_t *curr = tlisp_eval(args->car, env);    \
+            tlisp_obj_t *curr = eval(args->car, env);    \
             assert_type(curr, NUM);                            \
             res->num op##= curr->num;                          \
         }                                                      \
@@ -289,8 +293,8 @@ DEF_ARITH_OP(xor, ^)
         int a, b;                                               \
                                                                 \
         assert_nargs(2, args);                                  \
-        arg_a = tlisp_eval(arg_at(0, args), env);               \
-        arg_b = tlisp_eval(arg_at(1, args), env);               \
+        arg_a = eval(arg_at(0, args), env);               \
+        arg_b = eval(arg_at(1, args), env);               \
         assert_type(arg_a, NUM);                                \
         assert_type(arg_b, NUM);                                \
                                                                 \
@@ -313,8 +317,8 @@ DEF_CMP_OP(leq, <=)
         int a, b;                                                       \
                                                                         \
         assert_nargs(2, args);                                          \
-        arg_a = tlisp_eval(arg_at(0, args), env);                       \
-        arg_b = tlisp_eval(arg_at(1, args), env);                       \
+        arg_a = eval(arg_at(0, args), env);                       \
+        arg_b = eval(arg_at(1, args), env);                       \
         assert_type(arg_a, BOOL);                                       \
         assert_type(arg_b, BOOL);                                       \
                                                                         \
@@ -331,7 +335,7 @@ tlisp_obj_t *tlisp_not(tlisp_obj_t *args, env_t *env)
     tlisp_obj_t *arg;
     
     assert_nargs(1, args);
-    arg = tlisp_eval(args->car, env);
+    arg = eval(args->car, env);
     assert_type(arg, BOOL);
     return c_bool(arg) ? tlisp_false : tlisp_true; 
 }
@@ -342,7 +346,7 @@ tlisp_obj_t *tlisp_print(tlisp_obj_t *args, env_t *env)
         char str[256];
         tlisp_obj_t *curr;
 
-        curr = tlisp_eval(args->car, env);
+        curr = eval(args->car, env);
         obj_str(curr, str, 256);
         printf("%s\n", str);
         args = args->cdr;
