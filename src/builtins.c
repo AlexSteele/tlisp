@@ -41,8 +41,8 @@ void assert_type(tlisp_obj_t *obj, enum obj_tag_t expected)
     if (obj->tag != expected) {
         char objstr[128];
         obj_str(obj, objstr, 128);
-        fprintf(stderr, "ERROR: Bad type for object %s. Expected %s.\n",
-                objstr, tag_str(expected));
+        fprintf(stderr, "ERROR: Wrong type for %s (%s). Expected %s.\n",
+                objstr, tag_str(obj->tag), tag_str(expected));
         exit(1);
     }
 }

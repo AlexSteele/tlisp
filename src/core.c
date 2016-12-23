@@ -22,16 +22,16 @@ void obj_str(tlisp_obj_t *obj, char *str, size_t maxlen)
 {
     switch (obj->tag) {
     case BOOL:
-        snprintf(str, maxlen, "<bool %s>", obj->num ? "true" : "false");
+        snprintf(str, maxlen, "%s", obj->num ? "true" : "false");
         break;
     case NUM:
-        snprintf(str, maxlen, "<num %d>", obj->num);
+        snprintf(str, maxlen, "%d", obj->num);
         break;
     case STRING:
-        snprintf(str, maxlen, "<string \"%s\">", obj->str);
+        snprintf(str, maxlen, "\"%s\"", obj->str);
         break;
     case SYMBOL:
-        snprintf(str, maxlen, "<symbol %s>", obj->sym);
+        snprintf(str, maxlen, "%s", obj->sym);
         break;
     case CONS:
         strncpy(str, "<cons>", maxlen);
@@ -43,7 +43,7 @@ void obj_str(tlisp_obj_t *obj, char *str, size_t maxlen)
         strncpy(str, "<lambda>", maxlen);
         break;
     case NIL:
-        strncpy(str, "<nil>", maxlen);
+        strncpy(str, "nil", maxlen);
         break;
     }
 }
