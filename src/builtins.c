@@ -36,6 +36,18 @@ int nargs(tlisp_obj_t *args)
 }
 
 static
+void assert_fn(tlisp_obj_t *obj)
+{
+    if (obj->tag != NFUNC && obj->tag != LAMBDA) {
+        char objstr[128];
+        obj_str(obj, objstr, 128);
+        fprintf(stderr, "ERROR: Wrong type for %s (%s). Expected function.\n",
+                objstr, tag_str(obj->tag));
+        exit(1);
+    }
+}
+
+static
 void assert_type(tlisp_obj_t *obj, enum obj_tag_t expected)
 {
     if (obj->tag != expected) {
@@ -70,6 +82,45 @@ tlisp_obj_t *arg_at(int idx, tlisp_obj_t *args)
     return args->car;
 }
 
+static 
+tlisp_obj_t *call_fn(tlisp_obj_t *fn, tlisp_obj_t *args, env_t *env)
+{
+    if (fn->tag == NFUNC) {
+        return fn->fn(args, env);
+    } else {
+        env_t inner_env;
+        env_init(&inner_env);
+        inner_env.outer = env;
+        return apply(fn, args, &inner_env);
+    }
+}
+
+static
+tlisp_obj_t *call_1arity_fn(tlisp_obj_t *fn, tlisp_obj_t *arg, env_t *env)
+{
+    tlisp_obj_t arglist;
+    arglist.tag = CONS;
+    arglist.car = arg;
+    arglist.cdr = NULL;
+    return call_fn(fn, &arglist, env);
+}
+
+static
+tlisp_obj_t *call_2arity_fn(tlisp_obj_t *fn,
+                            tlisp_obj_t *arg1, tlisp_obj_t *arg2,
+                            env_t *env)
+{
+    tlisp_obj_t cons1;
+    tlisp_obj_t cons2;
+    cons1.tag = CONS;
+    cons1.car = arg1;
+    cons1.cdr = &cons2;
+    cons2.tag = CONS;
+    cons2.car = arg2;
+    cons2.cdr = NULL;
+    return call_fn(fn, &cons1, env);
+}
+
 tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *env)
 {
     switch (obj->tag) {
@@ -83,7 +134,6 @@ tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *env)
     case CONS:
         return tlisp_apply(obj, env);
     case NFUNC:
-        return obj;
     case LAMBDA:
         fprintf(stderr, "ERROR: eval called on function.\n");
         exit(1);
@@ -132,27 +182,19 @@ tlisp_obj_t *tlisp_apply(tlisp_obj_t *args, env_t *env)
     tlisp_obj_t *fn_args;
 
     if (!args) {
-        fprintf(stderr, "ERROR: Apply requires at least one argument.\n");
+        fprintf(stderr, "ERROR: apply requires at least one argument.\n");
         exit(1);
     }
     fn = eval(args->car, env);
     fn_args = args->cdr;
-    if (fn->tag == NFUNC) {
-        return fn->fn(fn_args, env);
-    } else {
-        env_t inner_env;
-
-        assert_type(fn, LAMBDA);
-        env_init(&inner_env);
-        inner_env.outer = env;
-        return apply(fn, fn_args, &inner_env);
-    }
+    assert_fn(fn);
+    return call_fn(fn, fn_args, env);
 }
 
 tlisp_obj_t *tlisp_quote_fn(tlisp_obj_t *args, env_t *env)
 {
     if (!args) {
-        fprintf(stderr, "ERROR: quote expects at least one argument.\n");
+        fprintf(stderr, "ERROR: quote requires at least one argument.\n");
         exit(1);
     }
     return args;
@@ -264,22 +306,207 @@ tlisp_obj_t *tlisp_lambda(tlisp_obj_t *args, env_t *env)
 
 tlisp_obj_t *tlisp_list(tlisp_obj_t *args, env_t *env)
 {
-    return 0;
+    tlisp_obj_t *head;
+    tlisp_obj_t *curr;
+
+    if (!args) {
+        return tlisp_nil;
+    }
+    head = new_cons();
+    head->car = eval(args->car, env);
+    curr = head;
+    while ((args = args->cdr)) {
+        curr->cdr = new_cons();
+        curr = curr->cdr;
+        curr->car = eval(args->car, env);
+    }
+    return head;
 }
 
 tlisp_obj_t *tlisp_cons(tlisp_obj_t *args, env_t *env)
 {
-    return 0;
+    tlisp_obj_t *res;
+
+    assert_nargs(2, args);
+    res = new_cons();
+    res->car = eval(args->car, env);
+    res->cdr = eval(args->cdr->car, env);
+    if (res->cdr == tlisp_nil) {
+        res->cdr = NULL;
+        return res;
+    }
+    assert_type(res->cdr, CONS);
+    return res;
+}
+
+tlisp_obj_t *tlisp_append(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *res;
+    tlisp_obj_t *head;
+
+    assert_nargs(2, args);
+    res = new_cons();
+    res->car = eval(args->car, env);
+    head = eval(args->cdr->car, env);
+    if (head == tlisp_nil) {
+        return res;
+    }
+    args = head;
+    while (args->cdr) {
+        args = args->cdr;
+    }
+    args->cdr = res;
+    return head;
 }
 
 tlisp_obj_t *tlisp_car(tlisp_obj_t *args, env_t *env)
 {
-    return 0;
+    tlisp_obj_t *list;
+
+    assert_nargs(1, args);
+    list = eval(args->car, env);
+    if (list == tlisp_nil)  {
+        return tlisp_nil;
+    }
+    assert_type(list, CONS);
+    return list->car;
 }
 
 tlisp_obj_t *tlisp_cdr(tlisp_obj_t *args, env_t *env)
 {
-    return 0;
+    tlisp_obj_t *list;
+
+    assert_nargs(1, args);
+    list = eval(args->car, env);
+    assert_type(list, CONS);
+    return list->cdr ? list->cdr : tlisp_nil;
+}
+
+tlisp_obj_t *tlisp_len(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *list;
+    tlisp_obj_t *res;
+    int len = 0;
+
+    assert_nargs(1, args);
+    list = eval(args->car, env);
+    res = new_num();
+    if (list == tlisp_nil) {
+        res->num = 0;
+        return res;
+    }
+    assert_type(list, CONS);
+    while (list) {
+        len += 1;
+        list = list->cdr;
+    }
+    res->num = len;
+    return res;
+}
+
+tlisp_obj_t *tlisp_for_each(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *list;
+    tlisp_obj_t *fn;
+
+    assert_nargs(2, args);
+    list = eval(args->car, env);
+    if (list == tlisp_nil) {
+        return 0;
+    }
+    assert_type(list, CONS);
+    fn = eval(args->cdr->car, env);
+    assert_fn(fn);
+    while (list) {
+        call_1arity_fn(fn, list->car, env);
+        list = list->cdr;
+    }
+    return tlisp_nil;
+}
+
+tlisp_obj_t *tlisp_map(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *list;
+    tlisp_obj_t *fn;
+    tlisp_obj_t *res;
+    tlisp_obj_t *curr;
+
+    assert_nargs(2, args);
+    list = eval(args->car, env);
+    if (list == tlisp_nil) {
+        return tlisp_nil;
+    }
+    assert_type(list, CONS);
+    fn = eval(args->cdr->car, env);
+    assert_fn(fn);
+    res = new_cons();
+    res->car = call_1arity_fn(fn, list->car, env);
+    curr = res;
+    while ((list = list->cdr)) {
+        curr->cdr = new_cons();
+        curr = curr->cdr;
+        curr->car = call_1arity_fn(fn, list->car, env);
+    }
+    return res;
+}
+
+tlisp_obj_t *tlisp_filter(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *list;
+    tlisp_obj_t *fn;
+    tlisp_obj_t *res = NULL;
+    tlisp_obj_t *curr;
+
+    assert_nargs(2, args);
+    list = eval(args->car, env);
+    if (list == tlisp_nil) {
+        return tlisp_nil;
+    }
+    assert_type(list, CONS);
+    fn = eval(args->cdr->car, env);
+    assert_fn(fn);
+    while (list) {
+        tlisp_obj_t *keep = call_1arity_fn(fn, list->car, env);
+        if (is_true(keep)) {
+            if (res == NULL) {
+                res = new_cons();
+                res->car = list->car;
+                curr = res;
+            } else {
+                curr->cdr = new_cons();
+                curr = curr->cdr;
+                curr->car = list->car;
+            }
+        }
+        list = list->cdr;
+    }
+    return res ? res : tlisp_nil;
+}
+
+tlisp_obj_t *tlisp_reduce(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *list;
+    tlisp_obj_t *fn;
+    tlisp_obj_t *res = NULL;
+
+    assert_nargs(2, args);
+    list = eval(args->car, env);
+    if (list == tlisp_nil) {
+        return tlisp_nil;
+    }
+    assert_type(list, CONS);
+    fn = eval(args->cdr->car, env);
+    assert_fn(fn);
+    if (!list->cdr) {
+        return list->car;
+    }
+    res = call_2arity_fn(fn, list->car, list->cdr->car, env);
+    list = list->cdr->cdr;
+    while (list) {
+        res = call_2arity_fn(fn, res, list->car, env);
+        list = list->cdr;
+    }
+    return res;
 }
 
 #define DEF_ARITH_OP(name, op)                                 \
@@ -295,10 +522,10 @@ tlisp_obj_t *tlisp_cdr(tlisp_obj_t *args, env_t *env)
         }                                                      \
         res = args->car->tag == NUM ?                          \
             num_cpy(args->car) :                               \
-            eval(args->car, env);                        \
+            eval(args->car, env);                              \
         assert_type(res, NUM);                                 \
         while ((args = args->cdr)) {                           \
-            tlisp_obj_t *curr = eval(args->car, env);    \
+            tlisp_obj_t *curr = eval(args->car, env);          \
             assert_type(curr, NUM);                            \
             res->num op##= curr->num;                          \
         }                                                      \

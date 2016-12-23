@@ -53,8 +53,14 @@ void init_genv(env_t *genv)
     REGISTER_NFUNC("lambda", tlisp_lambda);
     REGISTER_NFUNC("list", tlisp_list);
     REGISTER_NFUNC("cons", tlisp_cons);
+    REGISTER_NFUNC("append", tlisp_append);
     REGISTER_NFUNC("car", tlisp_car);
     REGISTER_NFUNC("cdr", tlisp_cdr);
+    REGISTER_NFUNC("len", tlisp_len);
+    REGISTER_NFUNC("for-each", tlisp_for_each);
+    REGISTER_NFUNC("map", tlisp_map);
+    REGISTER_NFUNC("filter", tlisp_filter);
+    REGISTER_NFUNC("reduce", tlisp_reduce);
     REGISTER_NFUNC("+", tlisp_add);
     REGISTER_NFUNC("-", tlisp_sub);
     REGISTER_NFUNC("*", tlisp_mul);
