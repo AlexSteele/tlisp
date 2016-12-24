@@ -18,7 +18,7 @@ const char *tag_str(enum obj_tag_t t)
     }
 }
 
-void obj_str(tlisp_obj_t *obj, char *str, size_t maxlen)
+void obj_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
 {
     switch (obj->tag) {
     case BOOL:
@@ -28,10 +28,10 @@ void obj_str(tlisp_obj_t *obj, char *str, size_t maxlen)
         snprintf(str, maxlen, "%d", obj->num);
         break;
     case STRING:
-        snprintf(str, maxlen, "\"%s\"", obj->str);
+        snprintf(str, maxlen, "%s", obj->str);
         break;
     case SYMBOL:
-        snprintf(str, maxlen, "%s", obj->sym);
+        snprintf(str, maxlen, "<symbol %s>", obj->sym);
         break;
     case CONS:
         strncpy(str, "<cons>", maxlen);

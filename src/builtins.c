@@ -17,6 +17,12 @@ int c_bool(tlisp_obj_t *obj)
 }
 
 static
+tlisp_obj_t *tlisp_bool(int c_bool)
+{
+    return c_bool ? tlisp_true : tlisp_false;
+}
+
+static
 tlisp_obj_t *num_cpy(tlisp_obj_t *obj)
 {
     tlisp_obj_t *res = new_num();
@@ -40,7 +46,7 @@ void assert_fn(tlisp_obj_t *obj)
 {
     if (obj->tag != NFUNC && obj->tag != LAMBDA) {
         char objstr[128];
-        obj_str(obj, objstr, 128);
+        obj_nstr(obj, objstr, 128);
         fprintf(stderr, "ERROR: Wrong type for %s (%s). Expected function.\n",
                 objstr, tag_str(obj->tag));
         exit(1);
@@ -52,7 +58,7 @@ void assert_type(tlisp_obj_t *obj, enum obj_tag_t expected)
 {
     if (obj->tag != expected) {
         char objstr[128];
-        obj_str(obj, objstr, 128);
+        obj_nstr(obj, objstr, 128);
         fprintf(stderr, "ERROR: Wrong type for %s (%s). Expected %s.\n",
                 objstr, tag_str(obj->tag), tag_str(expected));
         exit(1);
@@ -547,8 +553,8 @@ DEF_ARITH_OP(xor, ^)
         int a, b;                                               \
                                                                 \
         assert_nargs(2, args);                                  \
-        arg_a = eval(arg_at(0, args), env);               \
-        arg_b = eval(arg_at(1, args), env);               \
+        arg_a = eval(arg_at(0, args), env);                     \
+        arg_b = eval(arg_at(1, args), env);                     \
         assert_type(arg_a, NUM);                                \
         assert_type(arg_b, NUM);                                \
                                                                 \
@@ -561,11 +567,6 @@ DEF_CMP_OP(greater_than, >)
 DEF_CMP_OP(less_than, <)
 DEF_CMP_OP(geq, >=)
 DEF_CMP_OP(leq, <=)
-
-tlisp_obj_t *tlisp_bool(int c_bool)
-{
-    return c_bool ? tlisp_true : tlisp_false;
-}
 
 tlisp_obj_t *tlisp_equals(tlisp_obj_t *args, env_t *env)
 {
@@ -631,13 +632,35 @@ tlisp_obj_t *tlisp_not(tlisp_obj_t *args, env_t *env)
 tlisp_obj_t *tlisp_print(tlisp_obj_t *args, env_t *env)
 {
     while (args) {
-        char str[256];
+        char str[1024];
         tlisp_obj_t *curr;
 
         curr = eval(args->car, env);
-        obj_str(curr, str, 256);
+        obj_nstr(curr, str, 1024);
         printf("%s\n", str);
         args = args->cdr;
     }
     return tlisp_nil;
+}
+
+tlisp_obj_t *tlisp_str(tlisp_obj_t *args, env_t *env)
+{
+    char arg_strs[1024];
+    tlisp_obj_t *res = new_str();
+    int res_len = 0;
+
+    if (!args) {
+        res->str = strdup("");
+        return res;
+    }
+    while (args) {
+        tlisp_obj_t *curr = eval(args->car, env);
+        obj_nstr(curr, arg_strs + res_len, 1024 - res_len - 1);
+        res_len += strlen(arg_strs + res_len);
+        args = args->cdr;
+    }
+    arg_strs[res_len++] = 0;
+    res->str = malloc(sizeof(char) * res_len);
+    strcpy(res->str, arg_strs);
+    return res;
 }

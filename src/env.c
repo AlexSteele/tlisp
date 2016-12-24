@@ -42,11 +42,13 @@ void env_init(env_t *env)
 
 void env_add(env_t *env, const char *sym, tlisp_obj_t *obj)
 {
-    size_t idx = str_hash(sym) % env->symtab.cap;
+    int hash = str_hash(sym);
+    size_t idx = hash % env->symtab.cap;
     symtab_entry_t *entries = env->symtab.entries;
 
     if (env->symtab.len >= ((env->symtab.cap * 3) / 4)) {
         env_grow(env);
+        idx = hash % env->symtab.cap;
         entries = env->symtab.entries;
     }
     while (entries[idx].sym) {

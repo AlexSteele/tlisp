@@ -48,5 +48,6 @@ tlisp_obj_t *tlisp_and(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_or(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_not(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_print(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_str(tlisp_obj_t *, env_t *);
 
 #endif

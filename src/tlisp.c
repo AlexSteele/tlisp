@@ -77,6 +77,7 @@ void init_genv(env_t *genv)
     REGISTER_NFUNC("or", tlisp_or);
     REGISTER_NFUNC("not", tlisp_not);
     REGISTER_NFUNC("print", tlisp_print);
+    REGISTER_NFUNC("str", tlisp_str);
 }
 
 static
@@ -107,8 +108,8 @@ char *read_file(const char *fname)
 static
 int tlisp_repl(env_t *genv)
 {
-    char line[256];
-    char res_str[256];
+    char line[1024];
+    char res_str[1024];
     tlisp_obj_t **in;
     tlisp_obj_t *res;
     size_t len;
@@ -116,7 +117,7 @@ int tlisp_repl(env_t *genv)
     while (1) {
         printf("tlisp> ");
         fflush(stdout);
-        if (!fgets(line, 256, stdin)) {
+        if (!fgets(line, 1024, stdin)) {
             return 0;
         }
         in = read(line, &len);
@@ -124,7 +125,7 @@ int tlisp_repl(env_t *genv)
             continue;
         }
         res = eval(in[0], genv);
-        obj_str(res, res_str, 256);
+        obj_nstr(res, res_str, 1024);
         printf("%s\n", res_str); 
     }
 }
