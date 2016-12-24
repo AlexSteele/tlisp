@@ -7,8 +7,8 @@ default: tlisp
 bin:
 	mkdir -p bin
 
-tlisp: bin tlisp.o builtins.o core.o env.o read.o tlisp.o
-	$(CC) $(CCOPTS) bin/builtins.o bin/core.o bin/env.o bin/read.o bin/tlisp.o -o bin/tlisp
+tlisp: bin tlisp.o builtins.o core.o env.o gc.o process.o read.o tlisp.o
+	$(CC) $(CCOPTS) bin/builtins.o bin/core.o bin/env.o bin/gc.o bin/process.o bin/read.o bin/tlisp.o -o bin/tlisp
 
 builtins.o: bin src/builtins.c src/builtins.h
 	$(CC) $(CCOPTS) -c src/builtins.c -o bin/builtins.o
@@ -18,6 +18,12 @@ core.o: bin src/core.c src/core.h
 
 env.o: bin src/env.c src/env.h
 	$(CC) $(CCOPTS) -c src/env.c -o bin/env.o
+
+gc.o: bin src/gc.c src/gc.h
+	$(CC) $(CCOPTS) -c src/gc.c -o bin/gc.o
+
+process.o: bin src/process.c src/process.h
+	$(CC) $(CCOPTS) -c src/process.c -o bin/process.o
 
 read.o: bin src/read.c src/read.h
 	$(CC) $(CCOPTS) -c src/read.c -o bin/read.o

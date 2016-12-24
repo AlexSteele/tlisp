@@ -53,6 +53,7 @@ void obj_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
     {                                                   \
         tlisp_obj_t *obj = malloc(sizeof(tlisp_obj_t)); \
         obj->tag = tag_;                                \
+        obj->mark = 0;                                  \
         return obj;                                     \
     }                                                   \
     
@@ -65,6 +66,7 @@ tlisp_obj_t *new_cons()
 {
     tlisp_obj_t *obj = malloc(sizeof(tlisp_obj_t));
     obj->tag = CONS;
+    obj->mark = 0;
     obj->cdr = NULL; 
     return obj;
 }

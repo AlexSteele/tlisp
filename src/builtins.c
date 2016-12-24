@@ -95,9 +95,11 @@ tlisp_obj_t *call_fn(tlisp_obj_t *fn, tlisp_obj_t *args, env_t *env)
         return fn->fn(args, env);
     } else {
         env_t inner_env;
-        env_init(&inner_env);
-        inner_env.outer = env;
-        return apply(fn, args, &inner_env);
+        tlisp_obj_t *res;
+        env_init(&inner_env, env, env->proc);
+        res = apply(fn, args, &inner_env);
+        env_destroy(&inner_env);
+        return res;
     }
 }
 
@@ -213,7 +215,7 @@ tlisp_obj_t *tlisp_type_of(tlisp_obj_t *args, env_t *env)
     
     assert_nargs(1, args);
     arg = eval(args->car, env);
-    res = new_str();
+    res = proc_new_str(env->proc);
     res->str = strdup(tag_str(arg->tag));
     return res;
 }
@@ -291,7 +293,7 @@ tlisp_obj_t *tlisp_set(tlisp_obj_t *args, env_t *env)
 
 tlisp_obj_t *tlisp_lambda(tlisp_obj_t *args, env_t *env)
 {
-    tlisp_obj_t *res = new_lambda();
+    tlisp_obj_t *res = proc_new_lambda(env->proc);
     
     if (!args || !args->cdr) {
         fprintf(stderr,
@@ -318,11 +320,11 @@ tlisp_obj_t *tlisp_list(tlisp_obj_t *args, env_t *env)
     if (!args) {
         return tlisp_nil;
     }
-    head = new_cons();
+    head = proc_new_cons(env->proc);
     head->car = eval(args->car, env);
     curr = head;
     while ((args = args->cdr)) {
-        curr->cdr = new_cons();
+        curr->cdr = proc_new_cons(env->proc);
         curr = curr->cdr;
         curr->car = eval(args->car, env);
     }
@@ -334,7 +336,7 @@ tlisp_obj_t *tlisp_cons(tlisp_obj_t *args, env_t *env)
     tlisp_obj_t *res;
 
     assert_nargs(2, args);
-    res = new_cons();
+    res = proc_new_cons(env->proc);
     res->car = eval(args->car, env);
     res->cdr = eval(args->cdr->car, env);
     if (res->cdr == tlisp_nil) {
@@ -351,7 +353,7 @@ tlisp_obj_t *tlisp_append(tlisp_obj_t *args, env_t *env)
     tlisp_obj_t *head;
 
     assert_nargs(2, args);
-    res = new_cons();
+    res = proc_new_cons(env->proc);
     res->car = eval(args->car, env);
     head = eval(args->cdr->car, env);
     if (head == tlisp_nil) {
@@ -396,7 +398,7 @@ tlisp_obj_t *tlisp_len(tlisp_obj_t *args, env_t *env)
 
     assert_nargs(1, args);
     list = eval(args->car, env);
-    res = new_num();
+    res = proc_new_num(env->proc);
     if (list == tlisp_nil) {
         res->num = 0;
         return res;
@@ -445,11 +447,11 @@ tlisp_obj_t *tlisp_map(tlisp_obj_t *args, env_t *env)
     assert_type(list, CONS);
     fn = eval(args->cdr->car, env);
     assert_fn(fn);
-    res = new_cons();
+    res = proc_new_cons(env->proc);
     res->car = call_1arity_fn(fn, list->car, env);
     curr = res;
     while ((list = list->cdr)) {
-        curr->cdr = new_cons();
+        curr->cdr = proc_new_cons(env->proc);
         curr = curr->cdr;
         curr->car = call_1arity_fn(fn, list->car, env);
     }
@@ -475,11 +477,11 @@ tlisp_obj_t *tlisp_filter(tlisp_obj_t *args, env_t *env)
         tlisp_obj_t *keep = call_1arity_fn(fn, list->car, env);
         if (is_true(keep)) {
             if (res == NULL) {
-                res = new_cons();
+                res = proc_new_cons(env->proc);
                 res->car = list->car;
                 curr = res;
             } else {
-                curr->cdr = new_cons();
+                curr->cdr = proc_new_cons(env->proc);
                 curr = curr->cdr;
                 curr->car = list->car;
             }
@@ -646,7 +648,7 @@ tlisp_obj_t *tlisp_print(tlisp_obj_t *args, env_t *env)
 tlisp_obj_t *tlisp_str(tlisp_obj_t *args, env_t *env)
 {
     char arg_strs[1024];
-    tlisp_obj_t *res = new_str();
+    tlisp_obj_t *res = proc_new_str(env->proc);
     int res_len = 0;
 
     if (!args) {

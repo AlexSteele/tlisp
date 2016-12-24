@@ -2,6 +2,7 @@
 #include "builtins.h"
 #include "core.h"
 #include "env.h"
+#include "process.h"
 #include "read.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,9 +17,9 @@
     } while (0);                                       \
 
 static
-void init_genv(env_t *genv)
+void genv_init(env_t *genv, process_t *proc)
 {
-    env_init(genv);
+    env_init(genv, NULL, proc);
     {
         tlisp_nil = malloc(sizeof(tlisp_obj_t));
         tlisp_nil->tag = NIL;
@@ -157,6 +158,7 @@ int main(int argc, char **argv)
     int i;
     int help = 0;
     int interactive = 0;
+    process_t proc;
     env_t genv;
 
     if (argc < 2) {
@@ -173,7 +175,8 @@ int main(int argc, char **argv)
         print_usage(argv[0]);
         return 0;
     }
-    init_genv(&genv);
+    proc_init(&proc);
+    genv_init(&genv, &proc);
     if (interactive) {
         return tlisp_repl(&genv);
     } 

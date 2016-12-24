@@ -32,12 +32,18 @@ void env_grow(env_t *env)
     free(old);
 }
 
-void env_init(env_t *env)
+void env_init(env_t *env, env_t *outer, process_t *proc)
 {
     env->symtab.len = 0;
     env->symtab.cap = 16;
     env->symtab.entries = calloc(env->symtab.cap, sizeof(symtab_entry_t));
-    env->outer = NULL;
+    env->proc = proc;
+    env->outer = outer;
+}
+
+void env_destroy(env_t *env)
+{
+    free(env->symtab.entries);
 }
 
 void env_add(env_t *env, const char *sym, tlisp_obj_t *obj)
@@ -70,6 +76,7 @@ symtab_entry_t *env_find_internal(env_t *env, const char *sym)
     while (env) {
         symtab_entry_t *entries = env->symtab.entries;
         size_t idx = hash % env->symtab.cap;
+        
         while (entries[idx].sym) {
             if (!strcmp(entries[idx].sym, sym)) {
                 return &entries[idx];
@@ -109,4 +116,20 @@ void env_update(env_t *env, const char *sym, tlisp_obj_t *obj)
         exit(1);
     }
     entry->obj = obj;
+}
+
+void env_for_each(env_t *env, env_visitor fn)
+{
+    while (env) {
+        symtab_entry_t *entries = env->symtab.entries;
+        int cap = env->symtab.cap;
+        int i;
+
+        for (i = 0; i < cap; i++) {
+            if (entries[i].sym) {
+                fn(env, entries[i].obj);
+            }
+        }
+        env = env->outer;
+    }
 }
