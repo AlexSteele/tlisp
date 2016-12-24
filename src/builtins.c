@@ -557,29 +557,63 @@ DEF_ARITH_OP(xor, ^)
         return (a op b) ? tlisp_true : tlisp_false;             \
     }                                                           \
 
-DEF_CMP_OP(equals, ==)
 DEF_CMP_OP(greater_than, >)
 DEF_CMP_OP(less_than, <)
 DEF_CMP_OP(geq, >=)
 DEF_CMP_OP(leq, <=)
 
+tlisp_obj_t *tlisp_bool(int c_bool)
+{
+    return c_bool ? tlisp_true : tlisp_false;
+}
+
+tlisp_obj_t *tlisp_equals(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *arg_a, *arg_b;
+
+    assert_nargs(2, args);
+    arg_a = eval(arg_at(0, args), env);
+    arg_b = eval(arg_at(1, args), env);
+    if (arg_a->tag != arg_b->tag) {
+        return tlisp_false;
+    }
+    switch (arg_a->tag) {
+    case BOOL:
+        return tlisp_bool(arg_a == arg_b);
+    case NUM:
+        return tlisp_bool(arg_a->num == arg_b->num);
+    case STRING:
+        return tlisp_bool(!strcmp(arg_a->str, arg_b->str));
+    case SYMBOL:
+        return tlisp_bool(!strcmp(arg_a->sym, arg_b->sym));
+    case CONS:
+        return tlisp_bool(arg_a == arg_b);
+    case NFUNC:
+        return tlisp_bool(arg_a->fn == arg_b->fn);
+    case LAMBDA:
+        return tlisp_bool(arg_a == arg_b);
+    case NIL:
+        return tlisp_bool(arg_a == arg_b);
+    }
+}
+
 /* TODO: Be more flexible in arg types and number. */
-#define DEF_BOOL_OP(name, op)                                           \
-    tlisp_obj_t *tlisp_##name(tlisp_obj_t *args, env_t *env)            \
-    {                                                                   \
-        tlisp_obj_t *arg_a, *arg_b;                                     \
-        int a, b;                                                       \
-                                                                        \
-        assert_nargs(2, args);                                          \
+#define DEF_BOOL_OP(name, op)                                     \
+    tlisp_obj_t *tlisp_##name(tlisp_obj_t *args, env_t *env)      \
+    {                                                             \
+        tlisp_obj_t *arg_a, *arg_b;                               \
+        int a, b;                                                 \
+                                                                  \
+        assert_nargs(2, args);                                    \
         arg_a = eval(arg_at(0, args), env);                       \
         arg_b = eval(arg_at(1, args), env);                       \
-        assert_type(arg_a, BOOL);                                       \
-        assert_type(arg_b, BOOL);                                       \
-                                                                        \
-        a = c_bool(arg_a);                                              \
-        b = c_bool(arg_b);                                              \
-        return (a op b) ? tlisp_true : tlisp_false;                     \
-    }                                                                   \
+        assert_type(arg_a, BOOL);                                 \
+        assert_type(arg_b, BOOL);                                 \
+                                                                  \
+        a = c_bool(arg_a);                                        \
+        b = c_bool(arg_b);                                        \
+        return (a op b) ? tlisp_true : tlisp_false;               \
+    }                                                             \
     
 DEF_BOOL_OP(and, &&)
 DEF_BOOL_OP(or, ||)
