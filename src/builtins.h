@@ -16,6 +16,7 @@ tlisp_obj_t *tlisp_eval(tlisp_obj_t *args, env_t *);
 tlisp_obj_t *tlisp_apply(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_quote_fn(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_type_of(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_let(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_do(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_if(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_while(tlisp_obj_t *, env_t *);

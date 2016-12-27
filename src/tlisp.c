@@ -46,6 +46,7 @@ void genv_init(env_t *genv, process_t *proc)
     REGISTER_NFUNC("apply", tlisp_apply);
     REGISTER_NFUNC("'", tlisp_quote_fn);
     REGISTER_NFUNC("type-of", tlisp_type_of);
+    REGISTER_NFUNC("let", tlisp_let);
     REGISTER_NFUNC("do", tlisp_do);
     REGISTER_NFUNC("if", tlisp_if);
     REGISTER_NFUNC("while", tlisp_while);

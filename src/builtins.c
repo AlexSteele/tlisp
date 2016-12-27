@@ -226,6 +226,36 @@ tlisp_obj_t *tlisp_type_of(tlisp_obj_t *args, env_t *env)
     return res;
 }
 
+tlisp_obj_t *tlisp_let(tlisp_obj_t *args, env_t *env)
+{
+    env_t inner_env;
+    tlisp_obj_t *bindings;
+
+    assert_nargs(2, args, env->proc);
+    assert_type(arg_at(0, args), CONS, env->proc);
+    env_init(&inner_env, env, env->proc);
+    bindings = arg_at(0, args);
+    while (bindings) {
+        tlisp_obj_t *sym = bindings->car;
+        tlisp_obj_t *expr;
+
+        assert_type(sym, SYMBOL, env->proc);
+        bindings = bindings->cdr;
+        if (!bindings) {
+            char errstr[256];
+            snprintf(errstr, 256,
+                     "ERROR: No matching binding for %s.\n", sym->sym);
+            proc_fatal(env->proc, errstr);
+        }
+        expr = bindings->car;
+        env_add(&inner_env, sym->sym, eval(expr, env));
+        bindings = bindings->cdr;
+    }
+    eval(arg_at(1, args), &inner_env);
+    env_destroy(&inner_env);
+    return tlisp_nil;
+}
+
 tlisp_obj_t *tlisp_do(tlisp_obj_t *args, env_t *env)
 {
     tlisp_obj_t *res = NULL;
