@@ -1,5 +1,6 @@
 
 #include "builtins.h"
+#include "process.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -42,38 +43,40 @@ int nargs(tlisp_obj_t *args)
 }
 
 static
-void assert_fn(tlisp_obj_t *obj)
+void assert_fn(tlisp_obj_t *obj, process_t *proc)
 {
     if (obj->tag != NFUNC && obj->tag != LAMBDA) {
+        char errstr[256];
         char objstr[128];
         obj_nstr(obj, objstr, 128);
-        fprintf(stderr, "ERROR: Wrong type for %s (%s). Expected function.\n",
-                objstr, tag_str(obj->tag));
-        exit(1);
+        snprintf(errstr, 256,
+                 "ERROR: Wrong type for %s. Expected function.\n", objstr);
+        proc_fatal(proc, errstr);
     }
 }
 
 static
-void assert_type(tlisp_obj_t *obj, enum obj_tag_t expected)
+void assert_type(tlisp_obj_t *obj, enum obj_tag_t expected, process_t *proc)
 {
     if (obj->tag != expected) {
+        char errstr[256];
         char objstr[128];
         obj_nstr(obj, objstr, 128);
-        fprintf(stderr, "ERROR: Wrong type for %s (%s). Expected %s.\n",
-                objstr, tag_str(obj->tag), tag_str(expected));
-        exit(1);
+        snprintf(errstr, 256, "ERROR: Wrong type for %s (%s). Expected %s.\n",
+                 objstr, tag_str(obj->tag), tag_str(expected));
+        proc_fatal(proc, errstr);
     }
 }
 
 static
-void assert_nargs(int n, tlisp_obj_t *args)
+void assert_nargs(int n, tlisp_obj_t *args, process_t *proc)
 {
     int a = nargs(args);
     if (a != n) {
-        fprintf(stderr,
-                "ERROR: Wrong number of arguments. Got %d. Expected %d",
-                a, n);
-        exit(1);
+        char errstr[256];
+        snprintf(errstr, 256,
+                 "ERROR: Wrong number of arguments. Got %d. Expected %d.\n", a, n);
+        proc_fatal(proc, errstr);
     }
 }
 
@@ -137,8 +140,15 @@ tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *env)
     case STRING:
     case NIL:
         return obj;
-    case SYMBOL:
-        return env_find_bang(env, obj->sym);
+    case SYMBOL: {
+        tlisp_obj_t *o = env_find(env, obj->sym);
+        if (!o) {
+            char errstr[256];
+            snprintf(errstr, 256, "ERROR: Undefined symbol '%s'.\n", obj->sym);
+            proc_fatal(env->proc, errstr);
+        }
+        return o;
+    }
     case CONS:
         return tlisp_apply(obj, env);
     case NFUNC:
@@ -156,12 +166,10 @@ tlisp_obj_t *apply(tlisp_obj_t *fn, tlisp_obj_t *args, env_t *env)
 
     while (arg_list || args) {
         if (!arg_list) {
-            fprintf(stderr, "ERROR: Too many arguments.\n");
-            exit(1);
+            proc_fatal(env->proc, "ERROR: Too many arguments.\n");
         }
         if (!args) {
-            fprintf(stderr, "ERROR: Too few arguments.\n");
-            exit(1);
+            proc_fatal(env->proc, "ERROR: Too few arguments.\n");
         }
         env_add(env, arg_list->car->sym, eval(args->car, env));
         arg_list = arg_list->cdr;
@@ -176,7 +184,7 @@ tlisp_obj_t *apply(tlisp_obj_t *fn, tlisp_obj_t *args, env_t *env)
 
 tlisp_obj_t *tlisp_eval(tlisp_obj_t *args, env_t *env)
 {
-    assert_nargs(1, args);
+    assert_nargs(1, args, env->proc);
     if (args->car->tag == CONS &&
         args->car->car == tlisp_quote) {
         return eval(args->car->cdr, env);
@@ -190,20 +198,18 @@ tlisp_obj_t *tlisp_apply(tlisp_obj_t *args, env_t *env)
     tlisp_obj_t *fn_args;
 
     if (!args) {
-        fprintf(stderr, "ERROR: apply requires at least one argument.\n");
-        exit(1);
+        proc_fatal(env->proc, "ERROR: apply requires at least one argument.\n");
     }
     fn = eval(args->car, env);
     fn_args = args->cdr;
-    assert_fn(fn);
+    assert_fn(fn, env->proc);
     return call_fn(fn, fn_args, env);
 }
 
 tlisp_obj_t *tlisp_quote_fn(tlisp_obj_t *args, env_t *env)
 {
     if (!args) {
-        fprintf(stderr, "ERROR: quote requires at least one argument.\n");
-        exit(1);
+        proc_fatal(env->proc, "ERROR: quote requires at least one argument.\n");
     }
     return args;
 }
@@ -213,7 +219,7 @@ tlisp_obj_t *tlisp_type_of(tlisp_obj_t *args, env_t *env)
     tlisp_obj_t *res;
     tlisp_obj_t *arg;
     
-    assert_nargs(1, args);
+    assert_nargs(1, args, env->proc);
     arg = eval(args->car, env);
     res = proc_new_str(env->proc);
     res->str = strdup(tag_str(arg->tag));
@@ -222,11 +228,13 @@ tlisp_obj_t *tlisp_type_of(tlisp_obj_t *args, env_t *env)
 
 tlisp_obj_t *tlisp_do(tlisp_obj_t *args, env_t *env)
 {
+    tlisp_obj_t *res = NULL;
+    
     while (args) {
-        eval(args->car, env);
+        res = eval(args->car, env);
         args = args->cdr;
     }
-    return tlisp_nil;
+    return res ? res : tlisp_nil;
 }
 
 tlisp_obj_t *tlisp_if(tlisp_obj_t *args, env_t *env)
@@ -234,8 +242,7 @@ tlisp_obj_t *tlisp_if(tlisp_obj_t *args, env_t *env)
     int len = nargs(args);
 
     if (len != 2 && len != 3) {
-        fprintf(stderr, "ERROR: Bad if. Wrong number of args (%d).\n", len);
-        exit(1);
+        proc_fatal(env->proc, "ERROR: Invalid if expression.\n");
     }
     if (is_true(eval(arg_at(0, args), env))) {
         return eval(arg_at(1, args), env);
@@ -251,7 +258,7 @@ tlisp_obj_t *tlisp_while(tlisp_obj_t *args, env_t *env)
     tlisp_obj_t *cond;
     tlisp_obj_t *body;
 
-    assert_nargs(2, args);
+    assert_nargs(2, args, env->proc);
     cond = arg_at(0, args);
     body = arg_at(1, args);
 
@@ -266,10 +273,10 @@ tlisp_obj_t *tlisp_def(tlisp_obj_t *args, env_t *env)
     tlisp_obj_t *sym;
     tlisp_obj_t *val;
     
-    assert_nargs(2, args);
+    assert_nargs(2, args, env->proc);
     sym = arg_at(0, args);
     val = arg_at(1, args);
-    assert_type(sym, SYMBOL);
+    assert_type(sym, SYMBOL, env->proc);
 
     val = eval(val, env);
     env_add(env, sym->sym, val);
@@ -281,10 +288,10 @@ tlisp_obj_t *tlisp_set(tlisp_obj_t *args, env_t *env)
     tlisp_obj_t *sym;
     tlisp_obj_t *val;
 
-    assert_nargs(2, args);
+    assert_nargs(2, args, env->proc);
     sym = arg_at(0, args);
     val = arg_at(1, args);
-    assert_type(sym, SYMBOL);
+    assert_type(sym, SYMBOL, env->proc);
 
     val = eval(val, env);
     env_update(env, sym->sym, val);
@@ -296,17 +303,14 @@ tlisp_obj_t *tlisp_lambda(tlisp_obj_t *args, env_t *env)
     tlisp_obj_t *res = proc_new_lambda(env->proc);
     
     if (!args || !args->cdr) {
-        fprintf(stderr,
-                "ERROR: lambda requires at least two arguments. %d given.\n",
-                nargs(args));
-        exit(1);
+        proc_fatal(env->proc, "ERROR: lambda requires at least two arguments.\n");
     }
     res->car = args->car;
     res->cdr = args->cdr;
-    assert_type(args->car, CONS);
+    assert_type(args->car, CONS, env->proc);
     args = args->car;
     while (args) {
-        assert_type(args->car, SYMBOL);
+        assert_type(args->car, SYMBOL, env->proc);
         args = args->cdr;
     }
     return res;
@@ -335,7 +339,7 @@ tlisp_obj_t *tlisp_cons(tlisp_obj_t *args, env_t *env)
 {
     tlisp_obj_t *res;
 
-    assert_nargs(2, args);
+    assert_nargs(2, args, env->proc);
     res = proc_new_cons(env->proc);
     res->car = eval(args->car, env);
     res->cdr = eval(args->cdr->car, env);
@@ -343,7 +347,7 @@ tlisp_obj_t *tlisp_cons(tlisp_obj_t *args, env_t *env)
         res->cdr = NULL;
         return res;
     }
-    assert_type(res->cdr, CONS);
+    assert_type(res->cdr, CONS, env->proc);
     return res;
 }
 
@@ -352,7 +356,7 @@ tlisp_obj_t *tlisp_append(tlisp_obj_t *args, env_t *env)
     tlisp_obj_t *res;
     tlisp_obj_t *head;
 
-    assert_nargs(2, args);
+    assert_nargs(2, args, env->proc);
     res = proc_new_cons(env->proc);
     res->car = eval(args->car, env);
     head = eval(args->cdr->car, env);
@@ -371,12 +375,12 @@ tlisp_obj_t *tlisp_car(tlisp_obj_t *args, env_t *env)
 {
     tlisp_obj_t *list;
 
-    assert_nargs(1, args);
+    assert_nargs(1, args, env->proc);
     list = eval(args->car, env);
     if (list == tlisp_nil)  {
         return tlisp_nil;
     }
-    assert_type(list, CONS);
+    assert_type(list, CONS, env->proc);
     return list->car;
 }
 
@@ -384,9 +388,9 @@ tlisp_obj_t *tlisp_cdr(tlisp_obj_t *args, env_t *env)
 {
     tlisp_obj_t *list;
 
-    assert_nargs(1, args);
+    assert_nargs(1, args, env->proc);
     list = eval(args->car, env);
-    assert_type(list, CONS);
+    assert_type(list, CONS, env->proc);
     return list->cdr ? list->cdr : tlisp_nil;
 }
 
@@ -396,14 +400,14 @@ tlisp_obj_t *tlisp_len(tlisp_obj_t *args, env_t *env)
     tlisp_obj_t *res;
     int len = 0;
 
-    assert_nargs(1, args);
+    assert_nargs(1, args, env->proc);
     list = eval(args->car, env);
     res = proc_new_num(env->proc);
     if (list == tlisp_nil) {
         res->num = 0;
         return res;
     }
-    assert_type(list, CONS);
+    assert_type(list, CONS, env->proc);
     while (list) {
         len += 1;
         list = list->cdr;
@@ -417,14 +421,14 @@ tlisp_obj_t *tlisp_for_each(tlisp_obj_t *args, env_t *env)
     tlisp_obj_t *list;
     tlisp_obj_t *fn;
 
-    assert_nargs(2, args);
+    assert_nargs(2, args, env->proc);
     list = eval(args->car, env);
     if (list == tlisp_nil) {
         return 0;
     }
-    assert_type(list, CONS);
+    assert_type(list, CONS, env->proc);
     fn = eval(args->cdr->car, env);
-    assert_fn(fn);
+    assert_fn(fn, env->proc);
     while (list) {
         call_1arity_fn(fn, list->car, env);
         list = list->cdr;
@@ -439,14 +443,14 @@ tlisp_obj_t *tlisp_map(tlisp_obj_t *args, env_t *env)
     tlisp_obj_t *res;
     tlisp_obj_t *curr;
 
-    assert_nargs(2, args);
+    assert_nargs(2, args, env->proc);
     list = eval(args->car, env);
     if (list == tlisp_nil) {
         return tlisp_nil;
     }
-    assert_type(list, CONS);
+    assert_type(list, CONS, env->proc);
     fn = eval(args->cdr->car, env);
-    assert_fn(fn);
+    assert_fn(fn, env->proc);
     res = proc_new_cons(env->proc);
     res->car = call_1arity_fn(fn, list->car, env);
     curr = res;
@@ -465,14 +469,14 @@ tlisp_obj_t *tlisp_filter(tlisp_obj_t *args, env_t *env)
     tlisp_obj_t *res = NULL;
     tlisp_obj_t *curr;
 
-    assert_nargs(2, args);
+    assert_nargs(2, args, env->proc);
     list = eval(args->car, env);
     if (list == tlisp_nil) {
         return tlisp_nil;
     }
-    assert_type(list, CONS);
+    assert_type(list, CONS, env->proc);
     fn = eval(args->cdr->car, env);
-    assert_fn(fn);
+    assert_fn(fn, env->proc);
     while (list) {
         tlisp_obj_t *keep = call_1arity_fn(fn, list->car, env);
         if (is_true(keep)) {
@@ -497,14 +501,14 @@ tlisp_obj_t *tlisp_reduce(tlisp_obj_t *args, env_t *env)
     tlisp_obj_t *fn;
     tlisp_obj_t *res = NULL;
 
-    assert_nargs(2, args);
+    assert_nargs(2, args, env->proc);
     list = eval(args->car, env);
     if (list == tlisp_nil) {
         return tlisp_nil;
     }
-    assert_type(list, CONS);
+    assert_type(list, CONS, env->proc);
     fn = eval(args->cdr->car, env);
-    assert_fn(fn);
+    assert_fn(fn, env->proc);
     if (!list->cdr) {
         return list->car;
     }
@@ -523,18 +527,19 @@ tlisp_obj_t *tlisp_reduce(tlisp_obj_t *args, env_t *env)
         tlisp_obj_t *res;                                      \
                                                                \
         if (!args) {                                           \
-            fprintf(stderr,                                    \
-                    "ERROR: Too few arguments to %s (%d).\n",  \
-                    #op, nargs(args));                         \
-            exit(1);                                           \
+            char errstr[256];                                  \
+            snprintf(errstr, 256,                              \
+                     "ERROR: Too few args to %s.\n",           \
+                     #op);                                     \
+            proc_fatal(env->proc, errstr);                     \
         }                                                      \
         res = args->car->tag == NUM ?                          \
             num_cpy(args->car) :                               \
             eval(args->car, env);                              \
-        assert_type(res, NUM);                                 \
+        assert_type(res, NUM, env->proc);                      \
         while ((args = args->cdr)) {                           \
             tlisp_obj_t *curr = eval(args->car, env);          \
-            assert_type(curr, NUM);                            \
+            assert_type(curr, NUM, env->proc);                 \
             res->num op##= curr->num;                          \
         }                                                      \
         return res;                                            \
@@ -554,11 +559,11 @@ DEF_ARITH_OP(xor, ^)
         tlisp_obj_t *arg_a, *arg_b;                             \
         int a, b;                                               \
                                                                 \
-        assert_nargs(2, args);                                  \
+        assert_nargs(2, args, env->proc);                       \
         arg_a = eval(arg_at(0, args), env);                     \
         arg_b = eval(arg_at(1, args), env);                     \
-        assert_type(arg_a, NUM);                                \
-        assert_type(arg_b, NUM);                                \
+        assert_type(arg_a, NUM, env->proc);                     \
+        assert_type(arg_b, NUM, env->proc);                     \
                                                                 \
         a = arg_a->num;                                         \
         b = arg_b->num;                                         \
@@ -574,7 +579,7 @@ tlisp_obj_t *tlisp_equals(tlisp_obj_t *args, env_t *env)
 {
     tlisp_obj_t *arg_a, *arg_b;
 
-    assert_nargs(2, args);
+    assert_nargs(2, args, env->proc);
     arg_a = eval(arg_at(0, args), env);
     arg_b = eval(arg_at(1, args), env);
     if (arg_a->tag != arg_b->tag) {
@@ -607,11 +612,11 @@ tlisp_obj_t *tlisp_equals(tlisp_obj_t *args, env_t *env)
         tlisp_obj_t *arg_a, *arg_b;                               \
         int a, b;                                                 \
                                                                   \
-        assert_nargs(2, args);                                    \
+        assert_nargs(2, args, env->proc);                         \
         arg_a = eval(arg_at(0, args), env);                       \
         arg_b = eval(arg_at(1, args), env);                       \
-        assert_type(arg_a, BOOL);                                 \
-        assert_type(arg_b, BOOL);                                 \
+        assert_type(arg_a, BOOL, env->proc);                      \
+        assert_type(arg_b, BOOL, env->proc);                      \
                                                                   \
         a = c_bool(arg_a);                                        \
         b = c_bool(arg_b);                                        \
@@ -625,9 +630,9 @@ tlisp_obj_t *tlisp_not(tlisp_obj_t *args, env_t *env)
 {
     tlisp_obj_t *arg;
     
-    assert_nargs(1, args);
+    assert_nargs(1, args, env->proc);
     arg = eval(args->car, env);
-    assert_type(arg, BOOL);
+    assert_type(arg, BOOL, env->proc);
     return c_bool(arg) ? tlisp_false : tlisp_true; 
 }
 

@@ -1,5 +1,6 @@
 
 #include "process.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -19,6 +20,7 @@ tlisp_obj_t *new_obj(process_t *proc)
     }
     obj = proc->heap + proc->heap_len;
     obj->mark = 0;
+    proc->heap_len++;
     return obj;
 }
 
@@ -28,6 +30,7 @@ void proc_init(process_t *proc)
     proc->heap_len = 0;
     proc->heap_cap = (MIN_HEAP_SIZE + sizeof(tlisp_obj_t) - 1) / sizeof(tlisp_obj_t);
     proc->heap = malloc(sizeof(tlisp_obj_t) * proc->heap_cap);
+    proc->curr_expr = NULL;
 }
 
 #define DEF_CONSTRUCTOR(abbrev, tag_)                   \
@@ -49,4 +52,14 @@ tlisp_obj_t *proc_new_cons(process_t *proc)
     obj->tag = CONS;
     obj->cdr = NULL; 
     return obj;
+}
+
+void proc_fatal(process_t *proc, const char *msg)
+{
+    fprintf(stderr, "%s", msg);
+    fflush(stderr);
+    if (proc->curr_expr) {
+        line_info_print(proc->line_info, proc->curr_expr);        
+    }
+    exit(1); 
 }

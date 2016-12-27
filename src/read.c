@@ -143,9 +143,9 @@ static tlisp_obj_t *read_list(read_state *);
 static
 tlisp_obj_t *read_quoted_list(read_state *reader)
 {
-    tlisp_obj_t *res = new_cons();
+    tlisp_obj_t *obj = new_cons();
 
-    res->car = tlisp_quote;
+    obj->car = tlisp_quote;
     reader_adv(reader);
     if (*reader->cursor != '(') {
         char pos_str[256];
@@ -153,8 +153,8 @@ tlisp_obj_t *read_quoted_list(read_state *reader)
                 reader_pos_str(reader, pos_str, 256));
         exit(1);
     }
-    res->cdr = read_list(reader);
-    return res;
+    obj->cdr = read_list(reader);
+    return obj;
 }
 
 static
@@ -201,27 +201,23 @@ tlisp_obj_t *read_list(read_state *reader)
     return head;
 }
 
-tlisp_obj_t **read(char *raw, size_t *n)
+source_t read(char *text)
 {
-    size_t len = 0;
-    size_t cap = 128;
-    tlisp_obj_t **forms = malloc(sizeof(tlisp_obj_t*) * cap);
+    source_t source;
     read_state reader;
     char c;
-
-    reader_init(&reader, raw);
+    
+    source_init(&source, text);
+    reader_init(&reader, text);
     
     while ((c = *reader.cursor)) {
         if (whitespace(c)) {
             reader_adv(&reader);
         } else if (c == '(') {
-            tlisp_obj_t *form = read_list(&reader);
-            if (len == cap) {
-                cap *= 2;
-                forms = realloc(forms, sizeof(tlisp_obj_t*) * cap);
-            }
-            forms[len] = form;
-            len++;
+            int start_line = reader.line;
+            tlisp_obj_t *expression = read_list(&reader);
+            int end_line = reader.line;
+            source_add_expr(&source, expression, start_line, end_line);
         } else {
             char pos_str[256];
             fprintf(stderr, "ERROR: Unexpected symbol '%c'.\n%s\n",
@@ -229,6 +225,5 @@ tlisp_obj_t **read(char *raw, size_t *n)
             exit(1);
         }
     }
-    *n = len;
-    return forms;
+    return source;
 }

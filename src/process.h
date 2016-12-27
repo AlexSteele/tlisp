@@ -10,6 +10,8 @@ typedef struct process_t {
     size_t heap_len;
     size_t heap_cap;
     tlisp_obj_t *heap;
+    line_info_t *line_info;
+    tlisp_obj_t *curr_expr;
 } process_t;
 
 void proc_init(process_t *);
@@ -18,5 +20,6 @@ tlisp_obj_t *proc_new_str(process_t *);
 tlisp_obj_t *proc_new_sym(process_t *);
 tlisp_obj_t *proc_new_cons(process_t *);
 tlisp_obj_t *proc_new_lambda(process_t *);
+void proc_fatal(process_t *, const char *);
 
 #endif

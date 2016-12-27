@@ -48,6 +48,13 @@ void obj_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
     }
 }
 
+void print_obj(tlisp_obj_t *obj)
+{
+    char str[1024];
+    obj_nstr(obj, str, 1024);
+    printf("%s\n", str);
+}
+
 #define DEF_CONSTRUCTOR(abbrev, tag_)                   \
     tlisp_obj_t *new_##abbrev()                         \
     {                                                   \
@@ -69,4 +76,82 @@ tlisp_obj_t *new_cons()
     obj->mark = 0;
     obj->cdr = NULL; 
     return obj;
+}
+
+void line_info_init(line_info_t *info, char *text)
+{
+    info->text =text;
+    info->entries = NULL;
+}
+
+void line_info_add(line_info_t *info, tlisp_obj_t *obj, int line, int col)
+{
+    line_info_entry_t *entry = malloc(sizeof(line_info_entry_t));
+
+    entry->obj = obj;
+    entry->line = line;
+    entry->col = col;
+    entry->next = info->entries;
+    info->entries = entry;
+}
+
+static
+line_info_entry_t *find_entry(line_info_t *info, tlisp_obj_t *obj)
+{
+    line_info_entry_t *entry = info->entries;
+
+    while (entry) {
+        if (entry->obj == obj) {
+            return entry;
+        }
+        entry = entry->next;
+    }
+    return NULL;
+}
+
+static
+void print_line(line_info_t *info, int num)
+{
+    char *cursor = info->text;
+    int curr = 1;
+
+    while (curr < num) {
+        cursor = strchr(cursor, '\n');
+        cursor++;
+        curr++;
+    }
+    while (*cursor && *cursor != '\n') {
+        fprintf(stderr, "%c", *cursor);
+        cursor++;
+    }
+    fprintf(stderr, "\n");
+}
+
+void line_info_print(line_info_t *info, tlisp_obj_t *obj)
+{
+    line_info_entry_t *entry = find_entry(info, obj);
+
+    if (!entry) return;
+    fprintf(stderr, "Line %d\n", entry->line);
+    print_line(info, entry->line);
+}
+
+void source_init(source_t *source, char *text)
+{
+    line_info_init(&source->line_info, text);
+    source->cap = 16;
+    source->expressions = malloc(sizeof(tlisp_obj_t*) * source->cap);
+    source->nexpressions = 0;
+}
+
+void source_add_expr(source_t *source, tlisp_obj_t *expr,
+                     int start_line, int end_line)
+{
+    if (source->nexpressions == source->cap) {
+        source->cap *= 2;
+        source->expressions = realloc(source->expressions, source->cap);
+    }
+    line_info_add(&source->line_info, expr, start_line, 1);
+    source->expressions[source->nexpressions] = expr;
+    source->nexpressions++;
 }

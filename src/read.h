@@ -4,6 +4,6 @@
 #include "builtins.h"
 #include "core.h"
 
-tlisp_obj_t **read(char *source, size_t *out_len);
+source_t read(char *);
 
 #endif

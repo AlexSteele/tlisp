@@ -94,17 +94,6 @@ tlisp_obj_t *env_find(env_t *env, const char *sym)
     return entry ? entry->obj : NULL;
 }
 
-tlisp_obj_t *env_find_bang(env_t *env, const char *sym)
-{
-    tlisp_obj_t *obj = env_find(env, sym);
-    
-    if (!obj) {
-        fprintf(stderr, "ERROR: Undefined symbol '%s'.\n", sym);
-        exit(1);
-    }
-    return obj;
-}
-
 void env_update(env_t *env, const char *sym, tlisp_obj_t *obj)
 {
     symtab_entry_t *entry = env_find_internal(env, sym);

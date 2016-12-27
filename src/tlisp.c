@@ -111,9 +111,8 @@ int tlisp_repl(env_t *genv)
 {
     char line[1024];
     char res_str[1024];
-    tlisp_obj_t **in;
+    source_t in;
     tlisp_obj_t *res;
-    size_t len;
 
     while (1) {
         printf("tlisp> ");
@@ -121,13 +120,13 @@ int tlisp_repl(env_t *genv)
         if (!fgets(line, 1024, stdin)) {
             return 0;
         }
-        in = read(line, &len);
-        if (len == 0) {
+        in = read(line);
+        if (in.nexpressions == 0) {
             continue;
         }
-        res = eval(in[0], genv);
+        res = eval(in.expressions[0], genv);
         obj_nstr(res, res_str, 1024);
-        printf("%s\n", res_str); 
+        printf("%s\n", res_str);
     }
 }
 
@@ -135,12 +134,13 @@ static
 int tlisp_file(const char *fname, env_t *genv)
 {
     char *buff = read_file(fname);
+    source_t source = read(buff);
     size_t i;
-    size_t len;
-    tlisp_obj_t **forms = read(buff, &len);
-        
-    for (i = 0; i < len; i++) {
-        eval(forms[i], genv);
+
+    genv->proc->line_info = &source.line_info;
+    for (i = 0; i < source.nexpressions; i++) {
+        genv->proc->curr_expr = source.expressions[i];
+        eval(source.expressions[i], genv);
     }
     return 0;
 }
