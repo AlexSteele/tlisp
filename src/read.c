@@ -34,6 +34,7 @@ typedef struct read_state {
     int col;
     char curr_line[MAX_LINE];
     char *cursor;
+    int in_comment;
 } read_state;
 
 static
@@ -42,7 +43,24 @@ void reader_init(read_state *reader, char *source)
     reader->line = 1;
     reader->col = 1;
     reader->cursor = source;
+    reader->in_comment = 0;
     copy_line(source, reader->curr_line, MAX_LINE);
+}
+
+static void reader_adv(read_state *reader);
+
+static
+void reader_adv_comment(read_state *reader)
+{
+    reader->in_comment = 1;
+    while (*reader->cursor) {
+        reader_adv(reader);
+        if (*reader->cursor == '\n') {
+            reader_adv(reader);
+            break;
+        }
+    }
+    reader->in_comment = 0;
 }
 
 static
@@ -56,6 +74,9 @@ void reader_adv(read_state *reader)
         reader->col++;
     }
     reader->cursor++;
+    if (!reader->in_comment && *reader->cursor == ';') {
+        reader_adv_comment(reader);
+    }
 }
 
 static
