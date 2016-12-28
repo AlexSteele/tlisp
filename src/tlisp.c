@@ -118,9 +118,9 @@ static
 int tlisp_repl(env_t *genv)
 {
     char line[1024];
-    char res_str[1024];
     source_t in;
     tlisp_obj_t *res;
+    int i;
 
     while (1) {
         printf("tlisp> ");
@@ -132,9 +132,10 @@ int tlisp_repl(env_t *genv)
         if (in.nexpressions == 0) {
             continue;
         }
-        res = eval(in.expressions[0], genv);
-        obj_nstr(res, res_str, 1024);
-        printf("%s\n", res_str);
+        for (i = 0; i < in.nexpressions; i++) {
+            res = eval(in.expressions[i], genv);
+        }
+        print_obj(res);
     }
 }
 
