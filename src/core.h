@@ -13,6 +13,7 @@ enum obj_tag_t {
     CONS,
     NFUNC,
     LAMBDA,
+    MACRO,
     NIL
 };
 const char *tag_str(enum obj_tag_t);
@@ -41,6 +42,7 @@ tlisp_obj_t *new_str(void);
 tlisp_obj_t *new_sym(void);
 tlisp_obj_t *new_cons(void);
 tlisp_obj_t *new_lambda(void);
+tlisp_obj_t *new_macro(void);
 
 typedef struct line_info_entry_t {
     int line;

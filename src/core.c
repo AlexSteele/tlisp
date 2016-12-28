@@ -14,6 +14,7 @@ const char *tag_str(enum obj_tag_t t)
     case NFUNC: return "nfunc";
     case CONS: return "cons";
     case LAMBDA: return "lambda";
+    case MACRO: return "macro";
     case NIL: return "nil";
     }
 }
@@ -31,16 +32,40 @@ void obj_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
         snprintf(str, maxlen, "%s", obj->str);
         break;
     case SYMBOL:
-        snprintf(str, maxlen, "<symbol %s>", obj->sym);
+        snprintf(str, maxlen, "%s", obj->sym);
         break;
-    case CONS:
-        strncpy(str, "<cons>", maxlen);
+    case CONS: {
+#define REMAINING (maxlen - (tail - str))
+        char *tail = str;
+
+        if (maxlen < 3)
+            return;
+        tail[0] = '(';
+        tail++;
+        while (obj && REMAINING > 2) {
+            obj_nstr(obj->car, tail, REMAINING - 2);
+            while (*tail && REMAINING > 2) {
+                tail++;
+            }
+            obj = obj->cdr;
+            if (obj && REMAINING > 2) {
+                tail[0] = ' ';
+                tail++;
+            }
+        }
+        tail[0] = ')';
+        tail[1] = 0;
         break;
+#undef REMAINING
+    }
     case NFUNC:
         strncpy(str, "<native func>", maxlen);
         break;
     case LAMBDA:
         strncpy(str, "<lambda>", maxlen);
+        break;
+    case MACRO:
+        strncpy(str, "<macro>", maxlen);
         break;
     case NIL:
         strncpy(str, "nil", maxlen);
@@ -68,6 +93,7 @@ DEF_CONSTRUCTOR(str, STRING)
 DEF_CONSTRUCTOR(sym, SYMBOL)
 DEF_CONSTRUCTOR(num, NUM)
 DEF_CONSTRUCTOR(lambda, LAMBDA)
+DEF_CONSTRUCTOR(macro, MACRO)
 
 tlisp_obj_t *new_cons()
 {

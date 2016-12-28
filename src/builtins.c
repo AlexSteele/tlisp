@@ -24,9 +24,9 @@ tlisp_obj_t *tlisp_bool(int c_bool)
 }
 
 static
-tlisp_obj_t *num_cpy(tlisp_obj_t *obj)
+tlisp_obj_t *num_cpy(tlisp_obj_t *obj, process_t *proc)
 {
-    tlisp_obj_t *res = new_num();
+    tlisp_obj_t *res = proc_new_num(proc);
     res->num = obj->num;
     return res;
 }
@@ -45,7 +45,7 @@ int nargs(tlisp_obj_t *args)
 static
 void assert_fn(tlisp_obj_t *obj, process_t *proc)
 {
-    if (obj->tag != NFUNC && obj->tag != LAMBDA) {
+    if (obj->tag != NFUNC && obj->tag != LAMBDA && obj->tag != MACRO) {
         char errstr[256];
         char objstr[128];
         obj_nstr(obj, objstr, 128);
@@ -153,7 +153,8 @@ tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *env)
         return tlisp_apply(obj, env);
     case NFUNC:
     case LAMBDA:
-        fprintf(stderr, "ERROR: eval called on function.\n");
+    case MACRO:
+        fprintf(stderr, "ERROR: eval called on function or macro.\n");
         exit(1);
     }
 }
@@ -171,9 +172,12 @@ tlisp_obj_t *apply(tlisp_obj_t *fn, tlisp_obj_t *args, env_t *env)
         if (!args) {
             proc_fatal(env->proc, "ERROR: Too few arguments.\n");
         }
-        env_add(env, arg_list->car->sym, eval(args->car, env));
+        env_add(env, arg_list->car->sym, fn->tag == MACRO ? args->car : eval(args->car, env));
         arg_list = arg_list->cdr;
         args = args->cdr;
+    }
+    if (fn->tag == MACRO) {
+        body->car = eval(body->car, env);
     }
     while (body) {
         res = eval(body->car, env);
@@ -186,7 +190,8 @@ tlisp_obj_t *tlisp_eval(tlisp_obj_t *args, env_t *env)
 {
     assert_nargs(1, args, env->proc);
     if (args->car->tag == CONS &&
-        args->car->car == tlisp_quote) {
+        (args->car->car == tlisp_quote
+         || args->car->car == tlisp_backquote)) {
         return eval(args->car->cdr, env);
     }
     return eval(args->car, env);
@@ -212,6 +217,42 @@ tlisp_obj_t *tlisp_quote_fn(tlisp_obj_t *args, env_t *env)
         proc_fatal(env->proc, "ERROR: quote requires at least one argument.\n");
     }
     return args;
+}
+
+tlisp_obj_t *tlisp_backquote_fn(tlisp_obj_t *args, env_t *env)
+{
+
+    tlisp_obj_t *head = NULL;
+    tlisp_obj_t *curr;
+    tlisp_obj_t *next;
+
+    if (!args) {
+        proc_fatal(env->proc, "ERROR: backquote requires at least one argument.\n");
+    }
+    while (args) {
+        assert_type(args, CONS, env->proc);
+        next = proc_new_cons(env->proc);
+        if (args->car->tag == SYMBOL && args->car->sym[0] == '~') {
+            next->car = env_find(env, args->car->sym + 1);
+            if (!next->car) {
+                char errstr[256];
+                snprintf(errstr, 256, "ERROR: Unable to expand symbol %s\n", args->sym);
+                proc_fatal(env->proc, errstr);
+            }
+        } else if (args->car->tag == CONS) {
+            next->car = tlisp_backquote_fn(args->car, env); 
+        } else {
+            next->car = args->car;
+        }
+        if (head) {
+            curr->cdr = next;
+        } else {
+            head = next;
+        }
+        curr = next;
+        args = args->cdr;
+    }
+    return head;
 }
 
 tlisp_obj_t *tlisp_type_of(tlisp_obj_t *args, env_t *env)
@@ -335,9 +376,25 @@ tlisp_obj_t *tlisp_lambda(tlisp_obj_t *args, env_t *env)
     if (!args || !args->cdr) {
         proc_fatal(env->proc, "ERROR: lambda requires at least two arguments.\n");
     }
+    assert_type(args->car, CONS, env->proc);
     res->car = args->car;
     res->cdr = args->cdr;
+    args = args->car;
+    while (args) {
+        assert_type(args->car, SYMBOL, env->proc);
+        args = args->cdr;
+    }
+    return res;
+}
+
+tlisp_obj_t *tlisp_macro(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *res = proc_new_macro(env->proc);
+
+    assert_nargs(2, args, env->proc);
     assert_type(args->car, CONS, env->proc);
+    res->car = args->car;
+    res->cdr = args->cdr;
     args = args->car;
     while (args) {
         assert_type(args->car, SYMBOL, env->proc);
@@ -564,7 +621,7 @@ tlisp_obj_t *tlisp_reduce(tlisp_obj_t *args, env_t *env)
             proc_fatal(env->proc, errstr);                     \
         }                                                      \
         res = args->car->tag == NUM ?                          \
-            num_cpy(args->car) :                               \
+            num_cpy(args->car, env->proc) :                    \
             eval(args->car, env);                              \
         assert_type(res, NUM, env->proc);                      \
         while ((args = args->cdr)) {                           \
@@ -616,21 +673,21 @@ tlisp_obj_t *tlisp_equals(tlisp_obj_t *args, env_t *env)
         return tlisp_false;
     }
     switch (arg_a->tag) {
-    case BOOL:
-        return tlisp_bool(arg_a == arg_b);
     case NUM:
         return tlisp_bool(arg_a->num == arg_b->num);
     case STRING:
         return tlisp_bool(!strcmp(arg_a->str, arg_b->str));
     case SYMBOL:
         return tlisp_bool(!strcmp(arg_a->sym, arg_b->sym));
-    case CONS:
-        return tlisp_bool(arg_a == arg_b);
     case NFUNC:
         return tlisp_bool(arg_a->fn == arg_b->fn);
+    case BOOL:
+    case CONS:
     case LAMBDA:
-        return tlisp_bool(arg_a == arg_b);
+    case MACRO:
     case NIL:
+        return tlisp_bool(arg_a == arg_b);
+
         return tlisp_bool(arg_a == arg_b);
     }
 }

@@ -31,6 +31,11 @@ void genv_init(env_t *genv, process_t *proc)
         tlisp_quote->sym = "'";
     }
     {
+        tlisp_backquote = malloc(sizeof(tlisp_obj_t));
+        tlisp_backquote->tag = SYMBOL;
+        tlisp_backquote->sym = "`";
+    }
+    {
         tlisp_true = malloc(sizeof(tlisp_obj_t));
         tlisp_true->tag = BOOL;
         tlisp_true->num = 1;
@@ -45,6 +50,7 @@ void genv_init(env_t *genv, process_t *proc)
     REGISTER_NFUNC("eval", tlisp_eval);
     REGISTER_NFUNC("apply", tlisp_apply);
     REGISTER_NFUNC("'", tlisp_quote_fn);
+    REGISTER_NFUNC("`", tlisp_backquote_fn);
     REGISTER_NFUNC("type-of", tlisp_type_of);
     REGISTER_NFUNC("let", tlisp_let);
     REGISTER_NFUNC("do", tlisp_do);
@@ -53,6 +59,7 @@ void genv_init(env_t *genv, process_t *proc)
     REGISTER_NFUNC("def", tlisp_def);
     REGISTER_NFUNC("set!", tlisp_set);
     REGISTER_NFUNC("lambda", tlisp_lambda);
+    REGISTER_NFUNC("macro", tlisp_macro);
     REGISTER_NFUNC("list", tlisp_list);
     REGISTER_NFUNC("cons", tlisp_cons);
     REGISTER_NFUNC("append", tlisp_append);

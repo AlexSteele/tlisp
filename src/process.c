@@ -45,6 +45,7 @@ DEF_CONSTRUCTOR(str, STRING)
 DEF_CONSTRUCTOR(sym, SYMBOL)
 DEF_CONSTRUCTOR(num, NUM)
 DEF_CONSTRUCTOR(lambda, LAMBDA)
+DEF_CONSTRUCTOR(macro, MACRO)
 
 tlisp_obj_t *proc_new_cons(process_t *proc)
 {

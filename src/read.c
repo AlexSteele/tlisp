@@ -166,7 +166,7 @@ tlisp_obj_t *read_quoted_list(read_state *reader)
 {
     tlisp_obj_t *obj = new_cons();
 
-    obj->car = tlisp_quote;
+    obj->car = *reader->cursor == '\'' ? tlisp_quote : tlisp_backquote;
     reader_adv(reader);
     if (*reader->cursor != '(') {
         char pos_str[256];
@@ -207,7 +207,7 @@ tlisp_obj_t *read_list(read_state *reader)
             next->car = read_num(reader);
         } else if (c == '(') {
             next->car = read_list(reader);
-        } else if (c == '\'') {
+        } else if (c == '\'' || c == '`') {
             next->car = read_quoted_list(reader);
         } else {
             next->car = read_sym(reader);
@@ -234,6 +234,8 @@ source_t read(char *text)
     while ((c = *reader.cursor)) {
         if (whitespace(c)) {
             reader_adv(&reader);
+        } else if (c == ';') {
+            reader_adv_comment(&reader);
         } else if (c == '(') {
             int start_line = reader.line;
             tlisp_obj_t *expression = read_list(&reader);

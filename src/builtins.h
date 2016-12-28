@@ -6,6 +6,7 @@
 
 tlisp_obj_t *tlisp_nil;
 tlisp_obj_t *tlisp_quote;
+tlisp_obj_t *tlisp_backquote;
 tlisp_obj_t *tlisp_true;
 tlisp_obj_t *tlisp_false;
 
@@ -15,6 +16,7 @@ tlisp_obj_t *apply(tlisp_obj_t *fn, tlisp_obj_t *args, env_t *);
 tlisp_obj_t *tlisp_eval(tlisp_obj_t *args, env_t *);
 tlisp_obj_t *tlisp_apply(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_quote_fn(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_backquote_fn(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_type_of(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_let(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_do(tlisp_obj_t *, env_t *);
@@ -23,6 +25,7 @@ tlisp_obj_t *tlisp_while(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_def(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_set(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_lambda(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_macro(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_list(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_cons(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_append(tlisp_obj_t *, env_t *);

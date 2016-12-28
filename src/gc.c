@@ -23,8 +23,9 @@ void gc_mark(env_t *env, tlisp_obj_t *obj)
     case SYMBOL:
         return;
     case LAMBDA:
+    case MACRO:
         
-        // In lambda's case, assume symbols and forms
+        // In lambda and macro's case, assume symbols and forms
         // were allocated by the reader outside the context
         // of the process.
         return;
@@ -48,6 +49,7 @@ void free_obj(tlisp_obj_t *obj)
     case NFUNC:
     case NIL:
     case LAMBDA:
+    case MACRO:
     case CONS:
         return;
     case STRING:
