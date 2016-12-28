@@ -615,11 +615,7 @@ tlisp_obj_t *tlisp_reduce(tlisp_obj_t *args, env_t *env)
         tlisp_obj_t *res;                                      \
                                                                \
         if (!args) {                                           \
-            char errstr[256];                                  \
-            snprintf(errstr, 256,                              \
-                     "ERROR: Too few args to %s.\n",           \
-                     #op);                                     \
-            proc_fatal(env->proc, errstr);                     \
+            return tlisp_nil;                                  \
         }                                                      \
         res = args->car->tag == NUM ?                          \
             num_cpy(args->car, env->proc) :                    \
@@ -634,12 +630,33 @@ tlisp_obj_t *tlisp_reduce(tlisp_obj_t *args, env_t *env)
     }                                                          \
 
 DEF_ARITH_OP(add, +)
-DEF_ARITH_OP(sub, -)
 DEF_ARITH_OP(mul, *)
 DEF_ARITH_OP(div, /)
 DEF_ARITH_OP(arith_and, &)
 DEF_ARITH_OP(arith_or, |)
 DEF_ARITH_OP(xor, ^)
+
+tlisp_obj_t *tlisp_sub(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *res;
+    
+    if (!args) {
+        return tlisp_nil;
+    }
+    res = args->car->tag == NUM ?
+        num_cpy(args->car, env->proc) :
+        eval(args->car, env);
+    assert_type(res, NUM, env->proc);
+    if (!args->cdr) {
+        res->num = -res->num; 
+    }
+    while ((args = args->cdr)) {
+        tlisp_obj_t *curr = eval(args->car, env);
+        assert_type(curr, NUM, env->proc);
+        res->num -= curr->num;
+    }
+    return res;
+}    
 
 #define DEF_CMP_OP(name, op)                                    \
     tlisp_obj_t *tlisp_##name(tlisp_obj_t *args, env_t *env)    \
