@@ -12,6 +12,12 @@ int whitespace(char c)
 }
 
 static
+int is_quote(char c)
+{
+    return c == '\'' || c == '`';
+}
+
+static
 void copy_line(char *src, char *dest, size_t maxlen)
 {
     int i = 0;
@@ -236,9 +242,10 @@ source_t read(char *text)
             reader_adv(&reader);
         } else if (c == ';') {
             reader_adv_comment(&reader);
-        } else if (c == '(') {
+        } else if (is_quote(c) || c == '(') {
             int start_line = reader.line;
-            tlisp_obj_t *expression = read_list(&reader);
+            tlisp_obj_t *expression = is_quote(c) ?
+                read_quoted_list(&reader) : read_list(&reader);
             int end_line = reader.line;
             source_add_expr(&source, expression, start_line, end_line);
         } else {
