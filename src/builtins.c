@@ -178,6 +178,7 @@ tlisp_obj_t *apply(tlisp_obj_t *fn, tlisp_obj_t *args, env_t *env)
     }
     if (fn->tag == MACRO) {
         body->car = eval(body->car, env);
+        env = env->outer;
     }
     while (body) {
         res = eval(body->car, env);
