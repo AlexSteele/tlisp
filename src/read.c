@@ -174,13 +174,7 @@ tlisp_obj_t *read_quoted_list(read_state *reader)
 
     obj->car = *reader->cursor == '\'' ? tlisp_quote : tlisp_backquote;
     reader_adv(reader);
-    if (*reader->cursor != '(') {
-        char pos_str[256];
-        fprintf(stderr, "ERROR: Expecting '(' after quote.\n%s\n.",
-                reader_pos_str(reader, pos_str, 256));
-        exit(1);
-    }
-    obj->cdr = read_list(reader);
+    obj->cdr = *reader->cursor == '(' ? read_list(reader) : read_sym(reader);
     return obj;
 }
 
@@ -213,7 +207,7 @@ tlisp_obj_t *read_list(read_state *reader)
             next->car = read_num(reader);
         } else if (c == '(') {
             next->car = read_list(reader);
-        } else if (c == '\'' || c == '`') {
+        } else if (is_quote(c)) {
             next->car = read_quoted_list(reader);
         } else {
             next->car = read_sym(reader);
