@@ -1,5 +1,6 @@
 
 #include "core.h"
+#include "dict.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,13 +14,137 @@ const char *tag_str(enum obj_tag_t t)
     case SYMBOL: return "symbol";
     case NFUNC: return "nfunc";
     case CONS: return "cons";
+    case DICT: return "dict";
     case LAMBDA: return "lambda";
     case MACRO: return "macro";
     case NIL: return "nil";
     }
 }
 
-void obj_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
+size_t obj_hash(tlisp_obj_t *obj)
+{
+    switch (obj->tag) {
+    case BOOL:
+    case NUM:
+    case STRING:
+    case SYMBOL:
+    case CONS:
+    case DICT:
+    case NFUNC:
+    case LAMBDA:
+    case MACRO:
+    case NIL:
+        break;
+    }
+    return 0;                   /* TODO: IMPL */
+}
+
+int obj_equals(tlisp_obj_t *first, tlisp_obj_t *second)
+{
+    if (first->tag != second->tag) {
+        return 0;
+    }
+    switch (first->tag) {
+    case NUM:
+        return first->num == second->num;
+    case STRING:
+        return !strcmp(first->str, second->str);
+    case SYMBOL:
+        return !strcmp(first->sym, second->sym);
+    case NFUNC:
+        return first->fn == second->fn;
+    case BOOL:
+    case CONS:
+    case DICT:
+    case LAMBDA:
+    case MACRO:
+    case NIL:
+        return first == second;
+    }
+}
+
+static
+void cons_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
+{
+#define REMAINING (maxlen - (end - str))
+    char *end = str;
+
+    if (maxlen < 3) return;
+
+    *end++ = '(';
+    while (obj && REMAINING > 2) {
+        obj_nstr(obj->car, end, REMAINING - 2);
+        while (*end && REMAINING > 2) {
+            end++;
+        }
+        obj = obj->cdr;
+        if (obj && REMAINING > 2) {
+            *end++ = ' ';
+        }
+    }
+    *end++ = ')';
+    end[0] = 0;
+#undef REMAINING    
+}
+
+struct dict_str_state {
+    char *start;
+    char *end;
+    int maxlen;
+    int nvisited;
+    int dictlen;
+};
+
+static
+void dict_str_visitor(tlisp_obj_t *key, tlisp_obj_t *val, void *stateptr)
+{
+#define REMAINING (state->maxlen - (state->end - state->start))
+    struct dict_str_state *state = (struct dict_str_state *)stateptr;
+    int unseen;
+
+    if (REMAINING <= 2) return;
+    
+    obj_nstr(key, state->end, REMAINING - 2);
+    while (*state->end && REMAINING > 2) {
+        state->end++;
+    }
+
+    if (REMAINING <= 3) return;
+    
+    *state->end++ = ' ';
+    obj_nstr(val, state->end, REMAINING - 2);
+    while (*state->end && REMAINING > 2) {
+        state->end++;
+    }
+    state->nvisited++;
+    unseen = state->dictlen - state->nvisited;
+    if (REMAINING > 2 && unseen > 0) {
+        *state->end++ = ' ';
+    }
+#undef REMAINING
+}
+
+static
+void dict_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
+{
+    struct dict_str_state state = {
+        .start = str,
+        .end = str,
+        .maxlen = maxlen,
+        .nvisited = 0,
+        .dictlen = obj->dict->len
+    };
+    
+    if (maxlen < 4) return;
+    
+    *state.end++ = '#';
+    *state.end++ = '(';
+    dict_for_each(obj->dict, dict_str_visitor, &state);
+    *state.end++ = ')';
+    state.end[0] = 0;
+}
+
+char *obj_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
 {
     switch (obj->tag) {
     case BOOL:
@@ -34,30 +159,12 @@ void obj_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
     case SYMBOL:
         snprintf(str, maxlen, "%s", obj->sym);
         break;
-    case CONS: {
-#define REMAINING (maxlen - (tail - str))
-        char *tail = str;
-
-        if (maxlen < 3)
-            return;
-        tail[0] = '(';
-        tail++;
-        while (obj && REMAINING > 2) {
-            obj_nstr(obj->car, tail, REMAINING - 2);
-            while (*tail && REMAINING > 2) {
-                tail++;
-            }
-            obj = obj->cdr;
-            if (obj && REMAINING > 2) {
-                tail[0] = ' ';
-                tail++;
-            }
-        }
-        tail[0] = ')';
-        tail[1] = 0;
+    case CONS: 
+        cons_nstr(obj, str, maxlen);
         break;
-#undef REMAINING
-    }
+    case DICT:
+        dict_nstr(obj, str, maxlen);
+        break;
     case NFUNC:
         strncpy(str, "<native func>", maxlen);
         break;
@@ -71,6 +178,7 @@ void obj_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
         strncpy(str, "nil", maxlen);
         break;
     }
+    return str;
 }
 
 void print_obj(tlisp_obj_t *obj)
@@ -92,8 +200,6 @@ void print_obj(tlisp_obj_t *obj)
 DEF_CONSTRUCTOR(str, STRING)
 DEF_CONSTRUCTOR(sym, SYMBOL)
 DEF_CONSTRUCTOR(num, NUM)
-DEF_CONSTRUCTOR(lambda, LAMBDA)
-DEF_CONSTRUCTOR(macro, MACRO)
 
 tlisp_obj_t *new_cons()
 {
@@ -110,13 +216,14 @@ void line_info_init(line_info_t *info, char *text)
     info->entries = NULL;
 }
 
-void line_info_add(line_info_t *info, tlisp_obj_t *obj, int line, int col)
+void line_info_add(line_info_t *info, tlisp_obj_t *obj,
+                   int start_line, int end_line)
 {
     line_info_entry_t *entry = malloc(sizeof(line_info_entry_t));
 
     entry->obj = obj;
-    entry->line = line;
-    entry->col = col;
+    entry->start_line = start_line;
+    entry->end_line = end_line;
     entry->next = info->entries;
     info->entries = entry;
 }
@@ -136,21 +243,24 @@ line_info_entry_t *find_entry(line_info_t *info, tlisp_obj_t *obj)
 }
 
 static
-void print_line(line_info_t *info, int num)
+void print_lines(line_info_t *info, int start, int end)
 {
     char *cursor = info->text;
     int curr = 1;
 
-    while (curr < num) {
+    while (curr < start) {
         cursor = strchr(cursor, '\n');
         cursor++;
         curr++;
     }
-    while (*cursor && *cursor != '\n') {
+    while (*cursor && curr <= end) {
         fprintf(stderr, "%c", *cursor);
+        if (*cursor == '\n') {
+            curr++;
+        }
         cursor++;
     }
-    fprintf(stderr, "\n");
+    fflush(stderr);
 }
 
 void line_info_print(line_info_t *info, tlisp_obj_t *obj)
@@ -158,8 +268,12 @@ void line_info_print(line_info_t *info, tlisp_obj_t *obj)
     line_info_entry_t *entry = find_entry(info, obj);
 
     if (!entry) return;
-    fprintf(stderr, "Line %d\n", entry->line);
-    print_line(info, entry->line);
+    if (entry->start_line == entry->end_line) {
+        fprintf(stderr, "Line %d\n", entry->start_line);
+    } else {
+        fprintf(stderr, "Lines %d-%d\n", entry->start_line, entry->end_line);
+    }
+    print_lines(info, entry->start_line, entry->end_line);
 }
 
 void source_init(source_t *source, char *text)
@@ -177,7 +291,7 @@ void source_add_expr(source_t *source, tlisp_obj_t *expr,
         source->cap *= 2;
         source->expressions = realloc(source->expressions, source->cap);
     }
-    line_info_add(&source->line_info, expr, start_line, 1);
+    line_info_add(&source->line_info, expr, start_line, end_line);
     source->expressions[source->nexpressions] = expr;
     source->nexpressions++;
 }

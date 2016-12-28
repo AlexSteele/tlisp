@@ -36,6 +36,11 @@ void genv_init(env_t *genv, process_t *proc)
         tlisp_backquote->sym = "`";
     }
     {
+        tlisp_hashtag = malloc(sizeof(tlisp_obj_t));
+        tlisp_hashtag->tag = SYMBOL;
+        tlisp_hashtag->sym = "#";
+    }
+    {
         tlisp_true = malloc(sizeof(tlisp_obj_t));
         tlisp_true->tag = BOOL;
         tlisp_true->num = 1;
@@ -70,6 +75,10 @@ void genv_init(env_t *genv, process_t *proc)
     REGISTER_NFUNC("map", tlisp_map);
     REGISTER_NFUNC("filter", tlisp_filter);
     REGISTER_NFUNC("reduce", tlisp_reduce);
+    REGISTER_NFUNC("#", tlisp_dict);
+    REGISTER_NFUNC("get", tlisp_get);
+    REGISTER_NFUNC("ins", tlisp_ins);
+    REGISTER_NFUNC("rem", tlisp_rem);
     REGISTER_NFUNC("+", tlisp_add);
     REGISTER_NFUNC("-", tlisp_sub);
     REGISTER_NFUNC("*", tlisp_mul);

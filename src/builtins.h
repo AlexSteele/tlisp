@@ -7,6 +7,7 @@
 tlisp_obj_t *tlisp_nil;
 tlisp_obj_t *tlisp_quote;
 tlisp_obj_t *tlisp_backquote;
+tlisp_obj_t *tlisp_hashtag;
 tlisp_obj_t *tlisp_true;
 tlisp_obj_t *tlisp_false;
 
@@ -36,6 +37,10 @@ tlisp_obj_t *tlisp_for_each(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_map(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_filter(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_reduce(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_dict(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_get(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_ins(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_rem(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_add(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_sub(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_mul(tlisp_obj_t *, env_t *);

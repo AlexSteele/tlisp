@@ -1,5 +1,6 @@
 
 #include "process.h"
+#include "dict.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -52,6 +53,14 @@ tlisp_obj_t *proc_new_cons(process_t *proc)
     tlisp_obj_t *obj = new_obj(proc);
     obj->tag = CONS;
     obj->cdr = NULL; 
+    return obj;
+}
+
+tlisp_obj_t *proc_new_dict(process_t *proc)
+{
+    tlisp_obj_t *obj = new_obj(proc);
+    obj->tag = DICT;
+    obj->dict = dict_new();
     return obj;
 }
 

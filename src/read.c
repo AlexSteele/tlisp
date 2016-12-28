@@ -12,12 +12,6 @@ int whitespace(char c)
 }
 
 static
-int is_quote(char c)
-{
-    return c == '\'' || c == '`';
-}
-
-static
 void copy_line(char *src, char *dest, size_t maxlen)
 {
     int i = 0;
@@ -52,6 +46,37 @@ void reader_init(read_state *reader, char *source)
     reader->in_comment = 0;
     copy_line(source, reader->curr_line, MAX_LINE);
 }
+
+static
+char *reader_pos_str(read_state *reader, char *str, size_t maxlen)
+{
+    int len;
+    int len_with_arrow;
+
+    snprintf(str, maxlen, "Line %d Column %d\n%s\n",
+             reader->line, reader->col, reader->curr_line);
+    len = strlen(str);
+    len_with_arrow = len + reader->col + 1;
+    if (len_with_arrow <= maxlen) {
+        char *end = str + len; 
+        if (reader->col > 1) {
+            memset(end, ' ', reader->col - 1);            
+        }
+        end[reader->col - 1] = '^';
+        end[reader->col] = 0;
+    }
+    return str;
+}
+
+static
+void read_fail(read_state *reader)
+{
+    char pos_str[256];
+    fprintf(stderr, "ERROR: Unexpected symbol '%c'.\n%s\n",
+            *reader->cursor, reader_pos_str(reader, pos_str, 256));
+    exit(1);
+}
+
 
 static void reader_adv(read_state *reader);
 
@@ -92,27 +117,6 @@ void reader_adv_n(read_state *reader, int n)
     for (i = 0; i < n; i++) {
         reader_adv(reader);
     }
-}
-
-static
-char *reader_pos_str(read_state *reader, char *str, size_t maxlen)
-{
-    int len;
-    int len_with_arrow;
-
-    snprintf(str, maxlen, "Line %d Column %d\n%s\n",
-             reader->line, reader->col, reader->curr_line);
-    len = strlen(str);
-    len_with_arrow = len + reader->col + 1;
-    if (len_with_arrow <= maxlen) {
-        char *end = str + len; 
-        if (reader->col > 1) {
-            memset(end, ' ', reader->col - 1);            
-        }
-        end[reader->col - 1] = '^';
-        end[reader->col] = 0;
-    }
-    return str;
 }
 
 static
@@ -165,21 +169,48 @@ tlisp_obj_t *read_sym(read_state *reader)
     return obj;
 }
 
-static tlisp_obj_t *read_list(read_state *);
+static tlisp_obj_t *read_form(read_state *);
 
 static
-tlisp_obj_t *read_quoted_list(read_state *reader)
+tlisp_obj_t *read_quoted_expr(read_state *reader)
 {
     tlisp_obj_t *obj = new_cons();
 
-    obj->car = *reader->cursor == '\'' ? tlisp_quote : tlisp_backquote;
+    obj->car = tlisp_quote;
     reader_adv(reader);
-    obj->cdr = *reader->cursor == '(' ? read_list(reader) : read_sym(reader);
+    obj->cdr = *reader->cursor == '(' ?
+        read_form(reader) : read_sym(reader);
     return obj;
 }
 
 static
-tlisp_obj_t *read_list(read_state *reader)
+tlisp_obj_t *read_backquoted_expr(read_state *reader)
+{
+    tlisp_obj_t *obj = new_cons();
+
+    obj->car = tlisp_backquote;
+    reader_adv(reader);
+    obj->cdr = *reader->cursor == '(' ?
+        read_form(reader) : read_sym(reader);
+    return obj;
+}
+
+static
+tlisp_obj_t *read_dict_expr(read_state *reader)
+{
+    tlisp_obj_t *obj = new_cons();
+
+    obj->car = tlisp_hashtag;
+    reader_adv(reader);
+    if (*reader->cursor != '(') {
+        read_fail(reader);
+    }
+    obj->cdr = read_form(reader);
+    return obj;
+}
+
+static
+tlisp_obj_t *read_form(read_state *reader)
 {
     tlisp_obj_t *head = NULL;
     tlisp_obj_t *curr, *next;
@@ -206,9 +237,13 @@ tlisp_obj_t *read_list(read_state *reader)
         } else if (isdigit(c)) {
             next->car = read_num(reader);
         } else if (c == '(') {
-            next->car = read_list(reader);
-        } else if (is_quote(c)) {
-            next->car = read_quoted_list(reader);
+            next->car = read_form(reader);
+        } else if (c == '\'') {
+            next->car = read_quoted_expr(reader);
+        } else if (c == '`') {
+            next->car = read_backquoted_expr(reader);
+        } else if (c == '#') {
+            next->car = read_dict_expr(reader);
         } else {
             next->car = read_sym(reader);
         }
@@ -236,18 +271,25 @@ source_t read(char *text)
             reader_adv(&reader);
         } else if (c == ';') {
             reader_adv_comment(&reader);
-        } else if (is_quote(c) || c == '(') {
-            int start_line = reader.line;
-            tlisp_obj_t *expression = is_quote(c) ?
-                read_quoted_list(&reader) : read_list(&reader);
-            int end_line = reader.line;
-            source_add_expr(&source, expression, start_line, end_line);
         } else {
-            char pos_str[256];
-            fprintf(stderr, "ERROR: Unexpected symbol '%c'.\n%s\n",
-                    c, reader_pos_str(&reader, pos_str, 256));
-            exit(1);
-        }
+            int start_line = reader.line;
+            int end_line;
+            tlisp_obj_t *expression = NULL;
+
+            if (c == '(') {
+                expression = read_form(&reader);
+            } else if (c == '\'') {
+                expression = read_quoted_expr(&reader);
+            } else if (c == '`') {
+                expression = read_backquoted_expr(&reader);
+            } else if (c == '#') {
+                expression = read_dict_expr(&reader);
+            } else {
+                read_fail(&reader);
+            }
+            end_line = reader.line;
+            source_add_expr(&source, expression, start_line, end_line);
+        } 
     }
     return source;
 }

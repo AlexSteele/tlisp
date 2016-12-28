@@ -1,5 +1,6 @@
 
 #include "builtins.h"
+#include "dict.h"
 #include "process.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,9 +49,8 @@ void assert_fn(tlisp_obj_t *obj, process_t *proc)
     if (obj->tag != NFUNC && obj->tag != LAMBDA && obj->tag != MACRO) {
         char errstr[256];
         char objstr[128];
-        obj_nstr(obj, objstr, 128);
-        snprintf(errstr, 256,
-                 "ERROR: Wrong type for %s. Expected function.\n", objstr);
+        snprintf(errstr, 256, "ERROR: Wrong type for %s. Expected function.\n",
+                 obj_nstr(obj, objstr, 128));
         proc_fatal(proc, errstr);
     }
 }
@@ -61,9 +61,8 @@ void assert_type(tlisp_obj_t *obj, enum obj_tag_t expected, process_t *proc)
     if (obj->tag != expected) {
         char errstr[256];
         char objstr[128];
-        obj_nstr(obj, objstr, 128);
         snprintf(errstr, 256, "ERROR: Wrong type for %s (%s). Expected %s.\n",
-                 objstr, tag_str(obj->tag), tag_str(expected));
+                 obj_nstr(obj, objstr, 128), tag_str(obj->tag), tag_str(expected));
         proc_fatal(proc, errstr);
     }
 }
@@ -152,6 +151,7 @@ tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *env)
     case CONS:
         return tlisp_apply(obj, env);
     case NFUNC:
+    case DICT:
     case LAMBDA:
     case MACRO:
         fprintf(stderr, "ERROR: eval called on function or macro.\n");
@@ -609,6 +609,73 @@ tlisp_obj_t *tlisp_reduce(tlisp_obj_t *args, env_t *env)
     return res;
 }
 
+tlisp_obj_t *tlisp_dict(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *dict = proc_new_dict(env->proc);
+
+    while (args) {
+        tlisp_obj_t *key = eval(args->car, env);
+        tlisp_obj_t *val;
+
+        if (!args->cdr) {
+            char errstr[256];
+            char objstr[128];
+            snprintf(errstr, 256, "ERROR: Missing matching value for %s.\n",
+                     obj_nstr(key, objstr, 128));
+            proc_fatal(env->proc, errstr);
+        }
+        args = args->cdr;
+        val = eval(args->car, env);
+        dict_ins(dict->dict, key, val);
+        args = args->cdr;
+    }
+    return dict;
+}
+
+tlisp_obj_t *tlisp_get(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *dict;
+    tlisp_obj_t *key;
+    tlisp_obj_t *val;
+
+    assert_nargs(2, args, env->proc);
+    dict = eval(arg_at(0, args), env);
+    key = eval(arg_at(1, args), env);
+    assert_type(dict, DICT, env->proc);
+    val = dict_get(dict->dict, key);
+    return val ? val : tlisp_nil;
+}
+
+tlisp_obj_t *tlisp_ins(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *dict;
+    tlisp_obj_t *key;
+    tlisp_obj_t *val;
+    tlisp_obj_t *old;
+
+    assert_nargs(3, args, env->proc);
+    dict = eval(arg_at(0, args), env);
+    key = eval(arg_at(1, args), env);
+    val = eval(arg_at(2, args), env);
+    assert_type(dict, DICT, env->proc);
+    old = dict_ins(dict->dict, key, val);
+    return old ? old : tlisp_nil;
+}
+
+tlisp_obj_t *tlisp_rem(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *dict;
+    tlisp_obj_t *key;
+    tlisp_obj_t *val;
+
+    assert_nargs(2, args, env->proc);
+    dict = eval(arg_at(0, args), env);
+    key = eval(arg_at(1, args), env);
+    assert_type(dict, DICT, env->proc);
+    val = dict_rem(dict->dict, key);
+    return val ? val : tlisp_nil;
+}
+
 #define DEF_ARITH_OP(name, op)                                 \
     tlisp_obj_t *tlisp_##name(tlisp_obj_t *args, env_t *env)   \
     {                                                          \
@@ -687,27 +754,7 @@ tlisp_obj_t *tlisp_equals(tlisp_obj_t *args, env_t *env)
     assert_nargs(2, args, env->proc);
     arg_a = eval(arg_at(0, args), env);
     arg_b = eval(arg_at(1, args), env);
-    if (arg_a->tag != arg_b->tag) {
-        return tlisp_false;
-    }
-    switch (arg_a->tag) {
-    case NUM:
-        return tlisp_bool(arg_a->num == arg_b->num);
-    case STRING:
-        return tlisp_bool(!strcmp(arg_a->str, arg_b->str));
-    case SYMBOL:
-        return tlisp_bool(!strcmp(arg_a->sym, arg_b->sym));
-    case NFUNC:
-        return tlisp_bool(arg_a->fn == arg_b->fn);
-    case BOOL:
-    case CONS:
-    case LAMBDA:
-    case MACRO:
-    case NIL:
-        return tlisp_bool(arg_a == arg_b);
-
-        return tlisp_bool(arg_a == arg_b);
-    }
+    return tlisp_bool(obj_equals(arg_a, arg_b));
 }
 
 /* TODO: Be more flexible in arg types and number. */

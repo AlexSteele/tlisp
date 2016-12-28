@@ -48,7 +48,7 @@ void env_destroy(env_t *env)
 
 void env_add(env_t *env, const char *sym, tlisp_obj_t *obj)
 {
-    int hash = str_hash(sym);
+    size_t hash = str_hash(sym);
     size_t idx = hash % env->symtab.cap;
     symtab_entry_t *entries = env->symtab.entries;
 
@@ -107,7 +107,7 @@ void env_update(env_t *env, const char *sym, tlisp_obj_t *obj)
     entry->obj = obj;
 }
 
-void env_for_each(env_t *env, env_visitor fn)
+void env_for_each(env_t *env, env_visitor fn, void *state)
 {
     while (env) {
         symtab_entry_t *entries = env->symtab.entries;
@@ -116,7 +116,7 @@ void env_for_each(env_t *env, env_visitor fn)
 
         for (i = 0; i < cap; i++) {
             if (entries[i].sym) {
-                fn(env, entries[i].obj);
+                fn(entries[i].obj, state);
             }
         }
         env = env->outer;

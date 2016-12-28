@@ -1,19 +1,31 @@
 
 #include "gc.h"
+#include "dict.h"
 #include "process.h"
 #include <stdlib.h>
 #include <string.h>
 
 static char ALIVE = 1;
 
+static void gc_mark(tlisp_obj_t *, void *);
+
 static
-void gc_mark(env_t *env, tlisp_obj_t *obj)
+void gc_mark_dict(tlisp_obj_t *key, tlisp_obj_t *val, void *procptr)
 {
+    gc_mark(key, procptr);
+    gc_mark(val, procptr);
+}
+
+static
+void gc_mark(tlisp_obj_t *obj, void *procptr)
+{
+    process_t *proc = (process_t *)procptr;
+    
     if (obj->mark == ALIVE) 
         return;
 
-    env->proc->nalive++;
     obj->mark = ALIVE;
+    proc->nalive++;
     switch (obj->tag) {
     case BOOL:
     case NUM:
@@ -30,12 +42,15 @@ void gc_mark(env_t *env, tlisp_obj_t *obj)
         // of the process.
         return;
     case CONS:
-        gc_mark(env, obj->car);
+        gc_mark(obj->car, proc);
         while ((obj = obj->cdr)) {
             obj->mark = ALIVE;
-            env->proc->nalive++;
-            gc_mark(env, obj->car);
+            proc->nalive++;
+            gc_mark(obj->car, proc);
         }
+        return;
+    case DICT:
+        dict_for_each(obj->dict, gc_mark_dict, proc);
         return;
     }
 }
@@ -51,6 +66,9 @@ void free_obj(tlisp_obj_t *obj)
     case LAMBDA:
     case MACRO:
     case CONS:
+        return;
+    case DICT:
+        dict_free(obj->dict);
         return;
     case STRING:
         free(obj->str);
@@ -88,7 +106,7 @@ void gc(env_t *env)
     process_t *proc = env->proc;
 
     proc->nalive = 0;
-    env_for_each(env, gc_mark);
+    env_for_each(env, gc_mark, env->proc);
     if (proc->nalive < (proc->heap_len / 4) &&
         (proc->nalive * sizeof(tlisp_obj_t) * 2) >= MIN_HEAP_SIZE) {
         
