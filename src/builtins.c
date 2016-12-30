@@ -362,11 +362,13 @@ tlisp_obj_t *tlisp_set(tlisp_obj_t *args, env_t *env)
 
     assert_nargs(2, args, env->proc);
     sym = arg_at(0, args);
-    val = arg_at(1, args);
+    val = eval(arg_at(1, args), env);
     assert_type(sym, SYMBOL, env->proc);
-
-    val = eval(val, env);
-    env_update(env, sym->sym, val);
+    if (!env_update(env, sym->sym, val)) {
+        char errstr[128];
+        snprintf(errstr, 128, "ERROR: No previous value for symbol %s.\n", sym->sym);
+        proc_fatal(env->proc, errstr);
+    }
     return val;
 }
 
@@ -680,16 +682,16 @@ tlisp_obj_t *tlisp_rem(tlisp_obj_t *args, env_t *env)
     tlisp_obj_t *tlisp_##name(tlisp_obj_t *args, env_t *env)   \
     {                                                          \
         tlisp_obj_t *res;                                      \
+        tlisp_obj_t *curr;                                     \
                                                                \
         if (!args) {                                           \
             return tlisp_nil;                                  \
         }                                                      \
-        res = args->car->tag == NUM ?                          \
-            num_cpy(args->car, env->proc) :                    \
-            eval(args->car, env);                              \
-        assert_type(res, NUM, env->proc);                      \
+        curr = eval(args->car, env);                           \
+        assert_type(curr, NUM, env->proc);                     \
+        res = num_cpy(curr, env->proc);                        \
         while ((args = args->cdr)) {                           \
-            tlisp_obj_t *curr = eval(args->car, env);          \
+            curr = eval(args->car, env);                       \
             assert_type(curr, NUM, env->proc);                 \
             res->num op##= curr->num;                          \
         }                                                      \
@@ -706,16 +708,17 @@ DEF_ARITH_OP(xor, ^)
 tlisp_obj_t *tlisp_sub(tlisp_obj_t *args, env_t *env)
 {
     tlisp_obj_t *res;
+    tlisp_obj_t *curr;
     
     if (!args) {
         return tlisp_nil;
     }
-    res = args->car->tag == NUM ?
-        num_cpy(args->car, env->proc) :
-        eval(args->car, env);
-    assert_type(res, NUM, env->proc);
+    curr = eval(args->car, env);
+    assert_type(curr, NUM, env->proc);
+    res = num_cpy(curr, env->proc);
     if (!args->cdr) {
-        res->num = -res->num; 
+        res->num = -res->num;
+        return res;
     }
     while ((args = args->cdr)) {
         tlisp_obj_t *curr = eval(args->car, env);

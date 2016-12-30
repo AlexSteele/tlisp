@@ -27,7 +27,7 @@ void env_init(env_t *, env_t *outer, process_t *);
 void env_destroy(env_t *); 
 void env_add(env_t *, const char *sym, tlisp_obj_t *);
 tlisp_obj_t *env_find(env_t *, const char *sym);
-void env_update(env_t *, const char *sym, tlisp_obj_t *);
+int env_update(env_t *, const char *sym, tlisp_obj_t *);
 void env_for_each(env_t *, env_visitor, void *);
 
 #endif

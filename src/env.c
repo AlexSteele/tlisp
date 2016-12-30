@@ -94,17 +94,14 @@ tlisp_obj_t *env_find(env_t *env, const char *sym)
     return entry ? entry->obj : NULL;
 }
 
-void env_update(env_t *env, const char *sym, tlisp_obj_t *obj)
+int env_update(env_t *env, const char *sym, tlisp_obj_t *obj)
 {
     symtab_entry_t *entry = env_find_internal(env, sym);
 
-    if (!entry) {
-        fprintf(stderr,
-                "ERROR: Cannot update %s. No previous definition.\n",
-                sym);
-        exit(1);
-    }
+    if (!entry) return 0;
+
     entry->obj = obj;
+    return 1;
 }
 
 void env_for_each(env_t *env, env_visitor fn, void *state)
