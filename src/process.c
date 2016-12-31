@@ -35,6 +35,16 @@ void proc_init(process_t *proc)
     proc->curr_expr = NULL;
 }
 
+void proc_fatal(process_t *proc, const char *msg)
+{
+    fprintf(stderr, "%s", msg);
+    fflush(stderr);
+    if (proc->curr_expr) {
+        line_info_print(proc->line_info, proc->curr_expr);
+    }
+    exit(1);
+}
+
 #define DEF_CONSTRUCTOR(abbrev, tag_)                   \
     tlisp_obj_t *proc_new_##abbrev(process_t *proc)     \
     {                                                   \
@@ -73,12 +83,55 @@ tlisp_obj_t *proc_new_vec(process_t *proc)
     return obj;
 }
 
-void proc_fatal(process_t *proc, const char *msg)
+static
+int proc_fcheck(process_t *proc, tlisp_obj_t *fobj)
 {
-    fprintf(stderr, "%s", msg);
-    fflush(stderr);
-    if (proc->curr_expr) {
-        line_info_print(proc->line_info, proc->curr_expr);        
+    return fobj->tag == NUM &&
+        fobj->num >= 0 &&
+        fobj->num < proc->nfiles;
+}
+
+tlisp_obj_t *proc_open(process_t *proc, const char *fname, const char *mode)
+{
+    FILE *f;
+    tlisp_obj_t *fobj;
+
+    if (proc->nfiles == MAX_FILES) {
+        return NULL;
     }
-    exit(1); 
+    f = fopen(fname, mode);
+    if (!f) {
+        return NULL;
+    }
+    fobj = proc_new_num(proc);
+    fobj->num = proc->nfiles;
+    proc->ftable[proc->nfiles] = f;
+    proc->nfiles++;
+    return fobj;
+}
+
+FILE *proc_getf(process_t *proc, tlisp_obj_t *fobj)
+{
+    if (!proc_fcheck(proc, fobj)) {
+        return NULL;
+    }
+    return proc->ftable[fobj->num];
+}
+
+int proc_close(process_t *proc, tlisp_obj_t *fobj)
+{
+    FILE *f;
+    int res;
+    int i;
+
+    if (!proc_fcheck(proc, fobj)) {
+        return 0;
+    }
+    f = proc->ftable[fobj->num];
+    res = fclose(f) != EOF;
+    for (i = fobj->num + 1; i < proc->nfiles; i++) {
+        proc->ftable[i - 1] = proc->ftable[i];
+    }
+    proc->nfiles--;
+    return res;
 }

@@ -75,7 +75,9 @@ void genv_init(env_t *genv, process_t *proc)
     REGISTER_NFUNC("car", tlisp_car);
     REGISTER_NFUNC("cdr", tlisp_cdr);
     REGISTER_NFUNC("list", tlisp_list);
+    REGISTER_NFUNC("#", tlisp_dict);
     REGISTER_NFUNC("dict", tlisp_dict);
+    REGISTER_NFUNC("[", tlisp_vec);
     REGISTER_NFUNC("vec", tlisp_vec);
     REGISTER_NFUNC("ins", tlisp_ins);
     REGISTER_NFUNC("ins-at", tlisp_ins_at);
@@ -87,8 +89,10 @@ void genv_init(env_t *genv, process_t *proc)
     REGISTER_NFUNC("map", tlisp_map);
     REGISTER_NFUNC("filter", tlisp_filter);
     REGISTER_NFUNC("reduce", tlisp_reduce);
-    REGISTER_NFUNC("#", tlisp_dict);
-    REGISTER_NFUNC("[", tlisp_vec);
+    REGISTER_NFUNC("open", tlisp_open);
+    REGISTER_NFUNC("read-line", tlisp_readline);
+    REGISTER_NFUNC("write", tlisp_write);
+    REGISTER_NFUNC("close", tlisp_close);
     REGISTER_NFUNC("+", tlisp_add);
     REGISTER_NFUNC("-", tlisp_sub);
     REGISTER_NFUNC("*", tlisp_mul);

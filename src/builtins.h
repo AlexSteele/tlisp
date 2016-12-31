@@ -35,6 +35,9 @@ tlisp_obj_t *tlisp_cons(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_append(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_car(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_cdr(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_print(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_str(tlisp_obj_t *, env_t *);
+
 
 // ----------------------------------------
 // Collections
@@ -54,6 +57,14 @@ tlisp_obj_t *tlisp_filter(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_reduce(tlisp_obj_t *, env_t *);
 
 // ----------------------------------------
+// IO
+// ----------------------------------------
+tlisp_obj_t *tlisp_open(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_readline(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_write(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_close(tlisp_obj_t *, env_t *);
+
+// ----------------------------------------
 // Basic ops
 // ----------------------------------------
 tlisp_obj_t *tlisp_add(tlisp_obj_t *, env_t *);
@@ -71,7 +82,5 @@ tlisp_obj_t *tlisp_leq(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_and(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_or(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_not(tlisp_obj_t *, env_t *);
-tlisp_obj_t *tlisp_print(tlisp_obj_t *, env_t *);
-tlisp_obj_t *tlisp_str(tlisp_obj_t *, env_t *);
 
 #endif

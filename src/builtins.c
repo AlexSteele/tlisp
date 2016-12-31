@@ -468,6 +468,42 @@ tlisp_obj_t *tlisp_cdr(tlisp_obj_t *args, env_t *env)
     return list->cdr ? list->cdr : tlisp_nil;
 }
 
+tlisp_obj_t *tlisp_print(tlisp_obj_t *args, env_t *env)
+{
+    while (args) {
+        char str[1024];
+        tlisp_obj_t *curr;
+
+        curr = eval(args->car, env);
+        obj_nstr(curr, str, 1024);
+        printf("%s\n", str);
+        args = args->cdr;
+    }
+    return tlisp_nil;
+}
+
+tlisp_obj_t *tlisp_str(tlisp_obj_t *args, env_t *env)
+{
+    char arg_strs[1024];
+    tlisp_obj_t *res = proc_new_str(env->proc);
+    int res_len = 0;
+
+    if (!args) {
+        res->str = strdup("");
+        return res;
+    }
+    while (args) {
+        tlisp_obj_t *curr = eval(args->car, env);
+        obj_nstr(curr, arg_strs + res_len, 1024 - res_len - 1);
+        res_len += strlen(arg_strs + res_len);
+        args = args->cdr;
+    }
+    arg_strs[res_len++] = 0;
+    res->str = malloc(sizeof(char) * res_len);
+    strcpy(res->str, arg_strs);
+    return res;
+}
+
 tlisp_obj_t *tlisp_list(tlisp_obj_t *args, env_t *env)
 {
     tlisp_obj_t *head;
@@ -850,6 +886,68 @@ tlisp_obj_t *tlisp_reduce(tlisp_obj_t *args, env_t *env)
     return res;
 }
 
+tlisp_obj_t *tlisp_open(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *fname;
+    tlisp_obj_t *fmode;
+    tlisp_obj_t *res;
+
+    assert_nargs(2, args, env->proc);
+    fname = eval(arg_at(0, args), env);
+    fmode = eval(arg_at(1, args), env);
+    assert_type(fname, STRING, env->proc);
+    assert_type(fmode, STRING, env->proc);
+
+    res = proc_open(env->proc, fname->str, fmode->str); 
+    return res ? res : tlisp_nil;
+}
+
+tlisp_obj_t *tlisp_readline(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *fobj;
+    FILE *fin;
+    tlisp_obj_t *line;
+
+    assert_nargs(1, args, env->proc);
+    fobj = eval(arg_at(0, args), env);
+    fin = proc_getf(env->proc, fobj);
+    if (!fin) {
+        return tlisp_false;
+    }
+    line = proc_new_str(env->proc);
+    line->str = malloc(sizeof(char) * 128);
+    if (!fgets(line->str, 128, fin)) {
+        return tlisp_false;
+    }
+    return line;
+}
+
+tlisp_obj_t *tlisp_write(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *fobj;
+    tlisp_obj_t *msg;
+    FILE *fout;
+
+    assert_nargs(2, args, env->proc);
+    fobj = eval(arg_at(0, args), env);
+    msg = eval(arg_at(1, args), env);
+    assert_type(msg, STRING, env->proc);
+    fout = proc_getf(env->proc, fobj);
+    if (!fout) {
+        return tlisp_nil;
+    }
+    return fputs(msg->str, fout) != EOF ? tlisp_true : tlisp_false;
+}
+
+tlisp_obj_t *tlisp_close(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *fobj;
+
+    assert_nargs(1, args, env->proc);
+    fobj = eval(arg_at(0, args), env);
+    return proc_close(env->proc, fobj) ? tlisp_true : tlisp_false;
+}
+
 #define DEF_ARITH_OP(name, op)                                 \
     tlisp_obj_t *tlisp_##name(tlisp_obj_t *args, env_t *env)   \
     {                                                          \
@@ -960,40 +1058,4 @@ tlisp_obj_t *tlisp_not(tlisp_obj_t *args, env_t *env)
     arg = eval(args->car, env);
     assert_type(arg, BOOL, env->proc);
     return c_bool(arg) ? tlisp_false : tlisp_true; 
-}
-
-tlisp_obj_t *tlisp_print(tlisp_obj_t *args, env_t *env)
-{
-    while (args) {
-        char str[1024];
-        tlisp_obj_t *curr;
-
-        curr = eval(args->car, env);
-        obj_nstr(curr, str, 1024);
-        printf("%s\n", str);
-        args = args->cdr;
-    }
-    return tlisp_nil;
-}
-
-tlisp_obj_t *tlisp_str(tlisp_obj_t *args, env_t *env)
-{
-    char arg_strs[1024];
-    tlisp_obj_t *res = proc_new_str(env->proc);
-    int res_len = 0;
-
-    if (!args) {
-        res->str = strdup("");
-        return res;
-    }
-    while (args) {
-        tlisp_obj_t *curr = eval(args->car, env);
-        obj_nstr(curr, arg_strs + res_len, 1024 - res_len - 1);
-        res_len += strlen(arg_strs + res_len);
-        args = args->cdr;
-    }
-    arg_strs[res_len++] = 0;
-    res->str = malloc(sizeof(char) * res_len);
-    strcpy(res->str, arg_strs);
-    return res;
 }
