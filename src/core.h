@@ -1,10 +1,11 @@
 #ifndef TLISP_CORE_H_
 #define TLISP_CORE_H_
 
+#include "dict.h"
+#include "vector.h"
 #include <stddef.h>
 
 struct env_t; // Forward declaration.
-struct tlisp_dict_t; // Forward declaration.
 
 enum obj_tag_t {
     BOOL,
@@ -13,6 +14,7 @@ enum obj_tag_t {
     SYMBOL,
     CONS,
     DICT,
+    VEC,
     NFUNC,
     LAMBDA,
     MACRO,
@@ -31,7 +33,8 @@ typedef struct tlisp_obj_t {
             struct tlisp_obj_t *car;
             struct tlisp_obj_t *cdr;
         };
-        struct tlisp_dict_t *dict;
+        tlisp_dict_t dict;
+        tlisp_vector_t vec;
         tlisp_fn fn;
     };
     enum obj_tag_t tag;

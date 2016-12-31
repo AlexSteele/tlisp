@@ -23,5 +23,6 @@ tlisp_obj_t *proc_new_cons(process_t *);
 tlisp_obj_t *proc_new_lambda(process_t *);
 tlisp_obj_t *proc_new_macro(process_t *);
 tlisp_obj_t *proc_new_dict(process_t *);
+tlisp_obj_t *proc_new_vec(process_t *);
 
 #endif

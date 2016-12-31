@@ -1,7 +1,9 @@
 
 #include "builtins.h"
 #include "dict.h"
+#include "list.h"
 #include "process.h"
+#include "vector.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -152,6 +154,7 @@ tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *env)
         return tlisp_apply(obj, env);
     case NFUNC:
     case DICT:
+    case VEC:
     case LAMBDA:
     case MACRO:
         fprintf(stderr, "ERROR: eval called on function or macro.\n");
@@ -406,25 +409,6 @@ tlisp_obj_t *tlisp_macro(tlisp_obj_t *args, env_t *env)
     return res;
 }
 
-tlisp_obj_t *tlisp_list(tlisp_obj_t *args, env_t *env)
-{
-    tlisp_obj_t *head;
-    tlisp_obj_t *curr;
-
-    if (!args) {
-        return tlisp_nil;
-    }
-    head = proc_new_cons(env->proc);
-    head->car = eval(args->car, env);
-    curr = head;
-    while ((args = args->cdr)) {
-        curr->cdr = proc_new_cons(env->proc);
-        curr = curr->cdr;
-        curr->car = eval(args->car, env);
-    }
-    return head;
-}
-
 tlisp_obj_t *tlisp_cons(tlisp_obj_t *args, env_t *env)
 {
     tlisp_obj_t *res;
@@ -484,25 +468,280 @@ tlisp_obj_t *tlisp_cdr(tlisp_obj_t *args, env_t *env)
     return list->cdr ? list->cdr : tlisp_nil;
 }
 
+tlisp_obj_t *tlisp_list(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *head;
+    tlisp_obj_t *curr;
+
+    if (!args) {
+        return tlisp_nil;
+    }
+    head = proc_new_cons(env->proc);
+    head->car = eval(args->car, env);
+    curr = head;
+    while ((args = args->cdr)) {
+        curr->cdr = proc_new_cons(env->proc);
+        curr = curr->cdr;
+        curr->car = eval(args->car, env);
+    }
+    return head;
+}
+
+tlisp_obj_t *tlisp_dict(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *dict = proc_new_dict(env->proc);
+
+    while (args) {
+        tlisp_obj_t *key = eval(args->car, env);
+        tlisp_obj_t *val;
+
+        if (!args->cdr) {
+            char errstr[256];
+            char objstr[128];
+            snprintf(errstr, 256, "ERROR: Missing matching value for %s.\n",
+                     obj_nstr(key, objstr, 128));
+            proc_fatal(env->proc, errstr);
+        }
+        args = args->cdr;
+        val = eval(args->car, env);
+        dict_ins(&dict->dict, key, val);
+        args = args->cdr;
+    }
+    return dict;
+}
+
+tlisp_obj_t *tlisp_vec(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *vec = proc_new_vec(env->proc);
+
+    while (args) {
+        tlisp_obj_t *elem = eval(args->car, env);
+        vec_ins(&vec->vec, elem);
+        args = args->cdr;
+    }
+    return vec;
+}
+
+tlisp_obj_t *tlisp_ins(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *coll;
+    tlisp_obj_t *res = NULL;
+
+    if (!args) {
+        proc_fatal(env->proc, "ERROR: ins requires at least one argument.\n");
+    }
+    coll = eval(arg_at(0, args), env);
+    switch (coll->tag) {
+    case NIL: {
+        assert_nargs(2, args, env->proc);
+        res = proc_new_cons(env->proc);
+        res->car = eval(arg_at(1, args), env);
+        break;
+    }
+    case CONS: {
+        while ((args = args->cdr)) {
+            tlisp_obj_t *cell = proc_new_cons(env->proc);
+            cell->car = eval(args->car, env);
+            cell->cdr = coll;
+            coll = cell;
+        }
+        res = coll;
+        break;
+    }
+    case DICT: {
+        while ((args = args->cdr)) {
+            tlisp_obj_t *key = eval(args->car, env);
+            tlisp_obj_t *val;
+
+            args = args->cdr;
+            if (!args) {
+                proc_fatal(env->proc, "ERROR: Missing matching value.\n");
+            }
+            val = eval(args->car, env);
+            res = dict_ins(&coll->dict, key, val);
+        }
+        res = res ? res : tlisp_nil;
+        break;
+    }
+    case VEC: {
+        while ((args = args->cdr)) {
+            vec_ins(&coll->vec, eval(args->car, env));
+        }
+        res = tlisp_nil;
+        break;
+    }
+    default: {
+        char errstr[128];
+        snprintf(errstr, 128, "ERROR: Wrong arg type to len: %s.\n", tag_str(coll->tag));
+        proc_fatal(env->proc, errstr);
+    }
+    }
+    return res;
+}
+
+tlisp_obj_t *tlisp_ins_at(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *coll;
+    tlisp_obj_t *obj;
+    tlisp_obj_t *idx;
+    tlisp_obj_t *res = NULL;
+
+    assert_nargs(3, args, env->proc);
+    coll = eval(arg_at(0, args), env);
+    obj = eval(arg_at(1, args), env);
+    idx = eval(arg_at(2, args), env);
+    assert_type(idx, NUM, env->proc);
+    switch (coll->tag) {
+    case NIL: {
+        res = tlisp_nil;
+        break;
+    }
+    case VEC: {
+        res = tlisp_bool(vec_ins_at(&coll->vec, obj, idx->num));
+        break;
+    }
+    default: {
+        char errstr[128];
+        print_obj(coll);
+        snprintf(errstr, 128, "ERROR: Wrong arg type to ins-at: %s.\n", tag_str(coll->tag));
+        proc_fatal(env->proc, errstr);
+    }
+    }
+    return res;
+}
+
+tlisp_obj_t *tlisp_get(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *coll;
+    tlisp_obj_t *key;
+    tlisp_obj_t *res = NULL;
+
+    assert_nargs(2, args, env->proc);
+    coll = eval(arg_at(0, args), env);
+    key = eval(arg_at(1, args), env);
+    switch (coll->tag) {
+    case NIL: {
+        res = tlisp_nil;
+        break;
+    }
+    case CONS: {
+        assert_type(key, NUM, env->proc);
+        res = list_get(coll, key->num);
+        res = res ? res : tlisp_nil;
+        break;
+    }
+    case DICT: {
+        res = dict_get(&coll->dict, key);
+        res = res ? res : tlisp_nil;
+        break;
+    }
+    case VEC: {
+        assert_type(key, NUM, env->proc);
+        res = vec_get(&coll->vec, key->num);
+        res = res ? res : tlisp_nil;
+        break;
+    }
+    default: {
+        char errstr[128];
+        snprintf(errstr, 128, "ERROR: Wrong arg type to get: %s.\n", tag_str(coll->tag));
+        proc_fatal(env->proc, errstr);
+    }
+    }
+    return res;
+}
+
+tlisp_obj_t *tlisp_rem(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *coll;
+    tlisp_obj_t *key;
+    tlisp_obj_t *res = NULL;
+
+    assert_nargs(2, args, env->proc);
+    coll = eval(arg_at(0, args), env);
+    key = eval(arg_at(1, args), env);
+    switch (coll->tag) {
+    case NIL: {
+        res = tlisp_nil;
+        break;
+    }
+    case DICT: {
+        res = dict_rem(&coll->dict, key);
+        res = res ? res : tlisp_nil;
+        break;
+    }        
+    case VEC: {
+        res = tlisp_bool(vec_rem(&coll->vec, key));
+        break;
+    }
+    default: {
+        char errstr[128];
+        snprintf(errstr, 128, "ERROR: Wrong arg type to get: %s.\n", tag_str(coll->tag));
+        proc_fatal(env->proc, errstr);
+    }
+    }
+    return res;
+}
+
+tlisp_obj_t *tlisp_rem_at(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *coll;
+    tlisp_obj_t *idx;
+    tlisp_obj_t *res = NULL;
+
+    assert_nargs(2, args, env->proc);
+    coll = eval(arg_at(0, args), env);
+    idx = eval(arg_at(1, args), env);
+    assert_type(idx, NUM, env->proc);
+    switch (coll->tag) {
+    case NIL: {
+        res = tlisp_nil;
+        break;
+    }
+    case VEC: {
+        res = vec_rem_at(&coll->vec, idx->num);
+        res = res ? res : tlisp_nil;
+        break;
+    }
+    default: {
+        char errstr[128];
+        snprintf(errstr, 128, "ERROR: Wrong arg type to rem-at: %s.\n", tag_str(coll->tag));
+        proc_fatal(env->proc, errstr);
+    }
+    }
+    return res;
+}
+
 tlisp_obj_t *tlisp_len(tlisp_obj_t *args, env_t *env)
 {
-    tlisp_obj_t *list;
-    tlisp_obj_t *res;
-    int len = 0;
+    tlisp_obj_t *coll;
+    tlisp_obj_t *res = NULL;
 
     assert_nargs(1, args, env->proc);
-    list = eval(args->car, env);
+    coll = eval(args->car, env);
     res = proc_new_num(env->proc);
-    if (list == tlisp_nil) {
+    switch (coll->tag) {
+    case NIL: {
         res->num = 0;
-        return res;
+        break;
     }
-    assert_type(list, CONS, env->proc);
-    while (list) {
-        len += 1;
-        list = list->cdr;
+    case CONS: {
+        res->num = list_len(coll);
+        break;
     }
-    res->num = len;
+    case DICT: {
+        res->num = dict_len(&coll->dict);
+        break;
+    }
+    case VEC: {
+        res->num = vec_len(&coll->vec);
+        break;
+    }
+    default: {
+        char errstr[128];
+        snprintf(errstr, 128, "ERROR: Wrong arg type to len: %s.\n", tag_str(coll->tag));
+        proc_fatal(env->proc, errstr);
+    }
+    }
     return res;
 }
 
@@ -611,73 +850,6 @@ tlisp_obj_t *tlisp_reduce(tlisp_obj_t *args, env_t *env)
     return res;
 }
 
-tlisp_obj_t *tlisp_dict(tlisp_obj_t *args, env_t *env)
-{
-    tlisp_obj_t *dict = proc_new_dict(env->proc);
-
-    while (args) {
-        tlisp_obj_t *key = eval(args->car, env);
-        tlisp_obj_t *val;
-
-        if (!args->cdr) {
-            char errstr[256];
-            char objstr[128];
-            snprintf(errstr, 256, "ERROR: Missing matching value for %s.\n",
-                     obj_nstr(key, objstr, 128));
-            proc_fatal(env->proc, errstr);
-        }
-        args = args->cdr;
-        val = eval(args->car, env);
-        dict_ins(dict->dict, key, val);
-        args = args->cdr;
-    }
-    return dict;
-}
-
-tlisp_obj_t *tlisp_get(tlisp_obj_t *args, env_t *env)
-{
-    tlisp_obj_t *dict;
-    tlisp_obj_t *key;
-    tlisp_obj_t *val;
-
-    assert_nargs(2, args, env->proc);
-    dict = eval(arg_at(0, args), env);
-    key = eval(arg_at(1, args), env);
-    assert_type(dict, DICT, env->proc);
-    val = dict_get(dict->dict, key);
-    return val ? val : tlisp_nil;
-}
-
-tlisp_obj_t *tlisp_ins(tlisp_obj_t *args, env_t *env)
-{
-    tlisp_obj_t *dict;
-    tlisp_obj_t *key;
-    tlisp_obj_t *val;
-    tlisp_obj_t *old;
-
-    assert_nargs(3, args, env->proc);
-    dict = eval(arg_at(0, args), env);
-    key = eval(arg_at(1, args), env);
-    val = eval(arg_at(2, args), env);
-    assert_type(dict, DICT, env->proc);
-    old = dict_ins(dict->dict, key, val);
-    return old ? old : tlisp_nil;
-}
-
-tlisp_obj_t *tlisp_rem(tlisp_obj_t *args, env_t *env)
-{
-    tlisp_obj_t *dict;
-    tlisp_obj_t *key;
-    tlisp_obj_t *val;
-
-    assert_nargs(2, args, env->proc);
-    dict = eval(arg_at(0, args), env);
-    key = eval(arg_at(1, args), env);
-    assert_type(dict, DICT, env->proc);
-    val = dict_rem(dict->dict, key);
-    return val ? val : tlisp_nil;
-}
-
 #define DEF_ARITH_OP(name, op)                                 \
     tlisp_obj_t *tlisp_##name(tlisp_obj_t *args, env_t *env)   \
     {                                                          \
@@ -760,7 +932,6 @@ tlisp_obj_t *tlisp_equals(tlisp_obj_t *args, env_t *env)
     return tlisp_bool(obj_equals(arg_a, arg_b));
 }
 
-/* TODO: Be more flexible in arg types and number. */
 #define DEF_BOOL_OP(name, op)                                     \
     tlisp_obj_t *tlisp_##name(tlisp_obj_t *args, env_t *env)      \
     {                                                             \

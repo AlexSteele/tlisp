@@ -8,12 +8,16 @@ tlisp_obj_t *tlisp_nil;
 tlisp_obj_t *tlisp_quote;
 tlisp_obj_t *tlisp_backquote;
 tlisp_obj_t *tlisp_hashtag;
+tlisp_obj_t *tlisp_bracket;
 tlisp_obj_t *tlisp_true;
 tlisp_obj_t *tlisp_false;
 
 tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *);
 tlisp_obj_t *apply(tlisp_obj_t *fn, tlisp_obj_t *args, env_t *);
 
+// ----------------------------------------
+// Core
+// ----------------------------------------
 tlisp_obj_t *tlisp_eval(tlisp_obj_t *args, env_t *);
 tlisp_obj_t *tlisp_apply(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_quote_fn(tlisp_obj_t *, env_t *);
@@ -27,20 +31,31 @@ tlisp_obj_t *tlisp_def(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_set(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_lambda(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_macro(tlisp_obj_t *, env_t *);
-tlisp_obj_t *tlisp_list(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_cons(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_append(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_car(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_cdr(tlisp_obj_t *, env_t *);
+
+// ----------------------------------------
+// Collections
+// ----------------------------------------
+tlisp_obj_t *tlisp_list(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_dict(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_vec(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_ins(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_ins_at(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_get(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_rem(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_rem_at(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_len(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_for_each(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_map(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_filter(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_reduce(tlisp_obj_t *, env_t *);
-tlisp_obj_t *tlisp_dict(tlisp_obj_t *, env_t *);
-tlisp_obj_t *tlisp_get(tlisp_obj_t *, env_t *);
-tlisp_obj_t *tlisp_ins(tlisp_obj_t *, env_t *);
-tlisp_obj_t *tlisp_rem(tlisp_obj_t *, env_t *);
+
+// ----------------------------------------
+// Basic ops
+// ----------------------------------------
 tlisp_obj_t *tlisp_add(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_sub(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_mul(tlisp_obj_t *, env_t *);

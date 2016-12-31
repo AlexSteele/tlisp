@@ -15,6 +15,7 @@ const char *tag_str(enum obj_tag_t t)
     case NFUNC: return "nfunc";
     case CONS: return "cons";
     case DICT: return "dict";
+    case VEC: return "vector";
     case LAMBDA: return "lambda";
     case MACRO: return "macro";
     case NIL: return "nil";
@@ -30,6 +31,7 @@ size_t obj_hash(tlisp_obj_t *obj)
     case SYMBOL:
     case CONS:
     case DICT:
+    case VEC:
     case NFUNC:
     case LAMBDA:
     case MACRO:
@@ -56,6 +58,7 @@ int obj_equals(tlisp_obj_t *first, tlisp_obj_t *second)
     case BOOL:
     case CONS:
     case DICT:
+    case VEC:
     case LAMBDA:
     case MACRO:
     case NIL:
@@ -132,16 +135,40 @@ void dict_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
         .end = str,
         .maxlen = maxlen,
         .nvisited = 0,
-        .dictlen = obj->dict->len
+        .dictlen = obj->dict.len
     };
     
     if (maxlen < 4) return;
     
     *state.end++ = '#';
     *state.end++ = '(';
-    dict_for_each(obj->dict, dict_str_visitor, &state);
+    dict_for_each(&obj->dict, dict_str_visitor, &state);
     *state.end++ = ')';
     state.end[0] = 0;
+}
+
+static
+void vec_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
+{
+#define REMAINING (maxlen - (end - str))
+    char *end = str;
+    int i;
+
+    if (maxlen < 3) return;
+    
+    *end++ = '[';
+    for (i = 0; i < obj->vec.len && REMAINING > 2; i++) {
+        obj_nstr(obj->vec.elems[i], end, REMAINING - 2);
+        while (*end && REMAINING > 2) {
+            end++;
+        }
+        if (i < obj->vec.len - 1 && REMAINING > 2) {
+            *end++ = ' ';
+        }
+    }
+    *end++ = ']';
+    end[0] = 0;
+#undef REMAINING
 }
 
 char *obj_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
@@ -164,6 +191,9 @@ char *obj_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
         break;
     case DICT:
         dict_nstr(obj, str, maxlen);
+        break;
+    case VEC:
+        vec_nstr(obj, str, maxlen);
         break;
     case NFUNC:
         strncpy(str, "<native func>", maxlen);

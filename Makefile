@@ -7,8 +7,8 @@ default: tlisp
 bin:
 	mkdir -p bin
 
-tlisp: bin tlisp.o builtins.o core.o dict.o env.o gc.o process.o read.o tlisp.o
-	$(CC) $(CCOPTS) bin/builtins.o bin/core.o bin/dict.o bin/env.o bin/gc.o bin/process.o bin/read.o bin/tlisp.o -o bin/tlisp
+tlisp: bin tlisp.o builtins.o core.o dict.o env.o gc.o list.o process.o read.o tlisp.o vector.o
+	$(CC) $(CCOPTS) bin/*.o -o bin/tlisp
 
 builtins.o: bin src/builtins.c src/builtins.h
 	$(CC) $(CCOPTS) -c src/builtins.c -o bin/builtins.o
@@ -25,6 +25,9 @@ env.o: bin src/env.c src/env.h
 gc.o: bin src/gc.c src/gc.h
 	$(CC) $(CCOPTS) -c src/gc.c -o bin/gc.o
 
+list.o: bin src/list.c src/list.h
+	$(CC) $(CCOPTS) -c src/list.c -o bin/list.o
+
 process.o: bin src/process.c src/process.h
 	$(CC) $(CCOPTS) -c src/process.c -o bin/process.o
 
@@ -33,6 +36,9 @@ read.o: bin src/read.c src/read.h
 
 tlisp.o: bin src/tlisp.c
 	$(CC) $(CCOPTS) -c src/tlisp.c -o bin/tlisp.o
+
+vector.o: bin src/vector.c src/vector.h
+	$(CC) $(CCOPTS) -c src/vector.c -o bin/vector.o
 
 clean:
 	rm -rf bin

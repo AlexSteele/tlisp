@@ -12,6 +12,12 @@ int whitespace(char c)
 }
 
 static
+int numstart(char c)
+{
+    return isdigit(c) || c == '-';
+}
+
+static
 void copy_line(char *src, char *dest, size_t maxlen)
 {
     int i = 0;
@@ -36,6 +42,8 @@ typedef struct read_state {
     char *cursor;
     int in_comment;
 } read_state;
+
+static void reader_adv(read_state *);
 
 static
 void reader_init(read_state *reader, char *source)
@@ -76,9 +84,6 @@ void read_fail(read_state *reader)
             *reader->cursor, reader_pos_str(reader, pos_str, 256));
     exit(1);
 }
-
-
-static void reader_adv(read_state *reader);
 
 static
 void reader_adv_comment(read_state *reader)
@@ -123,14 +128,20 @@ static
 tlisp_obj_t *read_num(read_state *reader)
 {
     tlisp_obj_t *obj = new_num();
+    int neg = 0;
     int num = 0;
     char c;
 
-    while ((c = *reader->cursor) && !whitespace(c) && c != ')') {
+    if (*reader->cursor == '-') {
+        neg = 1;
+        reader_adv(reader);
+    }
+    while ((c = *reader->cursor) && numstart(c)) {
         num *= 10;
         num += c - '0';
         reader_adv(reader);
     }
+    num = neg ? -num : num;
     obj->num = num;
     return obj;
 }
@@ -153,6 +164,38 @@ tlisp_obj_t *read_str(read_state *reader)
     return obj;
 }
 
+static tlisp_obj_t *read_literal(read_state *);
+
+static
+tlisp_obj_t *read_delimited_form(read_state *reader, char delim)
+{
+    tlisp_obj_t *head = NULL;
+    tlisp_obj_t *curr, *next;
+    char c;
+
+    reader_adv(reader);
+    while ((c = *reader->cursor)) {
+        if (whitespace(c)) {
+            reader_adv(reader);
+            continue;
+        }
+        if (c == delim) {
+            reader_adv(reader);
+            break;
+        }
+
+        next = new_cons();
+        next->car = read_literal(reader);
+        if (head) {
+            curr->cdr = next;
+        } else {
+            head = next;
+        }
+        curr = next;
+    }
+    return head;
+}
+
 static
 tlisp_obj_t *read_sym(read_state *reader)
 {
@@ -169,34 +212,18 @@ tlisp_obj_t *read_sym(read_state *reader)
     return obj;
 }
 
-static tlisp_obj_t *read_form(read_state *);
-
 static
-tlisp_obj_t *read_quoted_expr(read_state *reader)
+tlisp_obj_t *read_list_literal(read_state *reader)
 {
-    tlisp_obj_t *obj = new_cons();
-
-    obj->car = tlisp_quote;
-    reader_adv(reader);
-    obj->cdr = *reader->cursor == '(' ?
-        read_form(reader) : read_sym(reader);
+    tlisp_obj_t *obj = read_delimited_form(reader, ')');
+    
+    if (!obj) return tlisp_nil;
+    
     return obj;
 }
 
 static
-tlisp_obj_t *read_backquoted_expr(read_state *reader)
-{
-    tlisp_obj_t *obj = new_cons();
-
-    obj->car = tlisp_backquote;
-    reader_adv(reader);
-    obj->cdr = *reader->cursor == '(' ?
-        read_form(reader) : read_sym(reader);
-    return obj;
-}
-
-static
-tlisp_obj_t *read_dict_expr(read_state *reader)
+tlisp_obj_t *read_dict_literal(read_state *reader)
 {
     tlisp_obj_t *obj = new_cons();
 
@@ -205,56 +232,66 @@ tlisp_obj_t *read_dict_expr(read_state *reader)
     if (*reader->cursor != '(') {
         read_fail(reader);
     }
-    obj->cdr = read_form(reader);
+    obj->cdr = read_delimited_form(reader, ')');
     return obj;
 }
 
 static
-tlisp_obj_t *read_form(read_state *reader)
+tlisp_obj_t *read_vec_literal(read_state *reader)
 {
-    tlisp_obj_t *head = NULL;
-    tlisp_obj_t *curr, *next;
-    char c;
+    tlisp_obj_t *obj = new_cons();
+    
+    obj->car = tlisp_bracket;
+    obj->cdr = read_delimited_form(reader, ']');
+    return obj;
+}
 
+static
+tlisp_obj_t *read_quoted_literal(read_state *reader)
+{
+    tlisp_obj_t *obj = new_cons();
+
+    obj->car = tlisp_quote;
     reader_adv(reader);
-    if (*reader->cursor == ')') {
-        reader_adv(reader);
-        return tlisp_nil;
-    }
-    while ((c = *reader->cursor)) {
-        if (whitespace(c)) {
-            reader_adv(reader);
-            continue;
-        }
-        if (c == ')') {
-            reader_adv(reader);
-            break;
-        }
+    obj->cdr = *reader->cursor == '(' ?
+        read_list_literal(reader) : read_sym(reader);
+    return obj;
+}
 
-        next = new_cons();
-        if (c == '"') {
-            next->car = read_str(reader);
-        } else if (isdigit(c)) {
-            next->car = read_num(reader);
-        } else if (c == '(') {
-            next->car = read_form(reader);
-        } else if (c == '\'') {
-            next->car = read_quoted_expr(reader);
-        } else if (c == '`') {
-            next->car = read_backquoted_expr(reader);
-        } else if (c == '#') {
-            next->car = read_dict_expr(reader);
-        } else {
-            next->car = read_sym(reader);
-        }
-        if (head) {
-            curr->cdr = next;
-        } else {
-            head = next;
-        }
-        curr = next;
+static
+tlisp_obj_t *read_bquoted_literal(read_state *reader)
+{
+    tlisp_obj_t *obj = new_cons();
+
+    obj->car = tlisp_backquote;
+    reader_adv(reader);
+    obj->cdr = *reader->cursor == '(' ?
+        read_list_literal(reader) : read_sym(reader);
+    return obj;
+}
+
+static
+tlisp_obj_t *read_literal(read_state *reader)
+{
+    char c = *reader->cursor;
+
+    if (c == '"') {
+        return read_str(reader);
+    } else if (numstart(c)) {
+        return read_num(reader);
+    } else if (c == '(') {
+        return read_list_literal(reader);
+    } else if (c == '\'') {
+        return read_quoted_literal(reader);
+    } else if (c == '`') {
+        return read_bquoted_literal(reader);
+    } else if (c == '#') {
+        return read_dict_literal(reader);
+    } else if (c == '[') {
+        return read_vec_literal(reader);
+    } else {
+        return read_sym(reader);
     }
-    return head;
 }
 
 source_t read(char *text)
@@ -273,21 +310,8 @@ source_t read(char *text)
             reader_adv_comment(&reader);
         } else {
             int start_line = reader.line;
-            int end_line;
-            tlisp_obj_t *expression = NULL;
-
-            if (c == '(') {
-                expression = read_form(&reader);
-            } else if (c == '\'') {
-                expression = read_quoted_expr(&reader);
-            } else if (c == '`') {
-                expression = read_backquoted_expr(&reader);
-            } else if (c == '#') {
-                expression = read_dict_expr(&reader);
-            } else {
-                read_fail(&reader);
-            }
-            end_line = reader.line;
+            tlisp_obj_t *expression = read_literal(&reader);
+            int end_line = reader.line;
             source_add_expr(&source, expression, start_line, end_line);
         } 
     }

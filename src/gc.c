@@ -2,6 +2,7 @@
 #include "gc.h"
 #include "dict.h"
 #include "process.h"
+#include "vector.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -50,7 +51,10 @@ void gc_mark(tlisp_obj_t *obj, void *procptr)
         }
         return;
     case DICT:
-        dict_for_each(obj->dict, gc_mark_dict, proc);
+        dict_for_each(&obj->dict, gc_mark_dict, proc);
+        return;
+    case VEC:
+        vec_for_each(&obj->vec, gc_mark, proc);
         return;
     }
 }
@@ -68,7 +72,10 @@ void free_obj(tlisp_obj_t *obj)
     case CONS:
         return;
     case DICT:
-        dict_free(obj->dict);
+        dict_destroy(&obj->dict);
+        return;
+    case VEC:
+        vec_destroy(&obj->vec);
         return;
     case STRING:
         free(obj->str);
@@ -91,7 +98,7 @@ void heap_shrink(process_t *proc)
     for (i = 0; i < proc->heap_len; i++) {
         if (proc->heap[i].mark == ALIVE) {
             memcpy(heap + len, proc->heap + i, sizeof(tlisp_obj_t));
-            len += 1;
+            len++;
         } else {
             free_obj(proc->heap + i);
         }

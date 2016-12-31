@@ -1,22 +1,20 @@
 
+#include "core.h"
 #include "dict.h"
 #include <stdlib.h>
 
 #define MIN_CAP 8
 
-tlisp_dict_t *dict_new(void)
+void dict_init(tlisp_dict_t *dict)
 {
-    tlisp_dict_t *dict = malloc(sizeof(tlisp_dict_t));
     dict->len = 0;
     dict->cap = MIN_CAP;
     dict->entries = calloc(dict->cap, sizeof(tlisp_dict_entry_t));
-    return dict;
 }
 
-void dict_free(tlisp_dict_t *dict)
+void dict_destroy(tlisp_dict_t *dict)
 {
     free(dict->entries);
-    free(dict);
 }
 
 static
@@ -31,6 +29,7 @@ void dict_resize(tlisp_dict_t *dict, int cap)
     for (i = 0; i < old_cap; i++) {
         if (entries[i].valid) {
             dict_ins(dict, entries[i].key, entries[i].val);
+            dict->len--;
         }
     }
     free(entries);
@@ -45,7 +44,7 @@ tlisp_obj_t *dict_ins(tlisp_dict_t *dict, tlisp_obj_t *key, tlisp_obj_t *val)
         dict_resize(dict, dict->cap * 2);
         idx = hash % dict->cap;
     }
-    while (dict->entries[idx].key && dict->entries[idx].valid) {
+    while (dict->entries[idx].valid) {
         if (obj_equals(dict->entries[idx].key, key)) {
             tlisp_obj_t *old = dict->entries[idx].val;
             dict->entries[idx].val = val;
@@ -87,9 +86,8 @@ tlisp_obj_t *dict_rem(tlisp_dict_t *dict, tlisp_obj_t *key)
 {
     tlisp_dict_entry_t *entry = dict_get_internal(dict, key);
 
-    if (!entry){
-        return NULL;
-    }
+    if (!entry) return NULL;
+    
     entry->valid = 0;
     dict->len--;
     if (dict->cap >= 2 * MIN_CAP && dict->len < dict->cap / 4) {

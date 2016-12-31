@@ -1,6 +1,7 @@
 
 #include "process.h"
 #include "dict.h"
+#include "vector.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -60,7 +61,15 @@ tlisp_obj_t *proc_new_dict(process_t *proc)
 {
     tlisp_obj_t *obj = new_obj(proc);
     obj->tag = DICT;
-    obj->dict = dict_new();
+    dict_init(&obj->dict);
+    return obj;
+}
+
+tlisp_obj_t *proc_new_vec(process_t *proc)
+{
+    tlisp_obj_t *obj = new_obj(proc);
+    obj->tag = VEC;
+    vec_init(&obj->vec);
     return obj;
 }
 

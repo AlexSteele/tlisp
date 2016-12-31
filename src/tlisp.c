@@ -41,6 +41,11 @@ void genv_init(env_t *genv, process_t *proc)
         tlisp_hashtag->sym = "#";
     }
     {
+        tlisp_bracket = malloc(sizeof(tlisp_obj_t));
+        tlisp_bracket->tag = SYMBOL;
+        tlisp_bracket->sym = "[";
+    }
+    {
         tlisp_true = malloc(sizeof(tlisp_obj_t));
         tlisp_true->tag = BOOL;
         tlisp_true->num = 1;
@@ -65,20 +70,25 @@ void genv_init(env_t *genv, process_t *proc)
     REGISTER_NFUNC("set!", tlisp_set);
     REGISTER_NFUNC("lambda", tlisp_lambda);
     REGISTER_NFUNC("macro", tlisp_macro);
-    REGISTER_NFUNC("list", tlisp_list);
     REGISTER_NFUNC("cons", tlisp_cons);
     REGISTER_NFUNC("append", tlisp_append);
     REGISTER_NFUNC("car", tlisp_car);
     REGISTER_NFUNC("cdr", tlisp_cdr);
+    REGISTER_NFUNC("list", tlisp_list);
+    REGISTER_NFUNC("dict", tlisp_dict);
+    REGISTER_NFUNC("vec", tlisp_vec);
+    REGISTER_NFUNC("ins", tlisp_ins);
+    REGISTER_NFUNC("ins-at", tlisp_ins_at);
+    REGISTER_NFUNC("get", tlisp_get);
+    REGISTER_NFUNC("rem", tlisp_rem);
+    REGISTER_NFUNC("rem-at", tlisp_rem_at);
     REGISTER_NFUNC("len", tlisp_len);
     REGISTER_NFUNC("for-each", tlisp_for_each);
     REGISTER_NFUNC("map", tlisp_map);
     REGISTER_NFUNC("filter", tlisp_filter);
     REGISTER_NFUNC("reduce", tlisp_reduce);
     REGISTER_NFUNC("#", tlisp_dict);
-    REGISTER_NFUNC("get", tlisp_get);
-    REGISTER_NFUNC("ins", tlisp_ins);
-    REGISTER_NFUNC("rem", tlisp_rem);
+    REGISTER_NFUNC("[", tlisp_vec);
     REGISTER_NFUNC("+", tlisp_add);
     REGISTER_NFUNC("-", tlisp_sub);
     REGISTER_NFUNC("*", tlisp_mul);
