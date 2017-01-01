@@ -28,6 +28,8 @@ tlisp_obj_t *tlisp_if(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_while(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_def(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_set(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_defstruct(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_setq(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_lambda(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_macro(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_cons(tlisp_obj_t *, env_t *);
@@ -36,9 +38,6 @@ tlisp_obj_t *tlisp_car(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_cdr(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_print(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_str(tlisp_obj_t *, env_t *);
-tlisp_obj_t *tlisp_defstruct(tlisp_obj_t *, env_t *);
-tlisp_obj_t *tlisp_setq(tlisp_obj_t *, env_t *);
-
 
 // ----------------------------------------
 // Collections

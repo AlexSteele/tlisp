@@ -93,9 +93,9 @@ void cons_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
 #define REMAINING (maxlen - (end - str))
     char *end = str;
 
-    if (maxlen < 3) return;
-
-    *end++ = '(';
+    if (REMAINING > 0) {
+        *end++ = '(';
+    }
     while (obj && REMAINING > 2) {
         end = obj_pnstr(obj->car, end, REMAINING - 2);
         obj = obj->cdr;
@@ -103,7 +103,9 @@ void cons_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
             *end++ = ' ';
         }
     }
-    *end++ = ')';
+    if (REMAINING > 0) {
+        *end++ = ')';        
+    }
     end[0] = 0;
 #undef REMAINING    
 }
@@ -119,9 +121,10 @@ void struct_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
     char *end;
     int i;
 
-    if (maxlen < strlen("struct<>") + 1) return;
-
-    end = stpcpy(str, "struct<");
+    end = stpncpy(str, obj->structobj.sdef->name, maxlen);
+    if (REMAINING > 0) {
+        *end++ = '<';
+    }
     for (i = 0; i < nfields && REMAINING > 2; i++) {
         end = stpncpy(end, field_names[i], REMAINING - 2);
         
@@ -135,7 +138,9 @@ void struct_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
             *end++ = ' ';
         }
     }
-    *end++ = '>';
+    if (REMAINING > 0) {
+        *end++ = '>';
+    }
     end[0] = 0;
 #undef REMAINING
 }
@@ -174,6 +179,7 @@ void dict_str_visitor(tlisp_obj_t *key, tlisp_obj_t *val, void *stateptr)
 static
 void dict_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
 {
+#define REMAINING (maxlen - (state.end - state.start))
     struct dict_str_state state = {
         .start = str,
         .end = str,
@@ -182,13 +188,18 @@ void dict_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
         .dictlen = obj->dict.len
     };
     
-    if (maxlen < 4) return;
-    
-    *state.end++ = '#';
-    *state.end++ = '(';
+    if (REMAINING > 0) {
+        *state.end++ = '#';
+    }
+    if (REMAINING > 0) {
+        *state.end++ = '(';
+    }
     dict_for_each(&obj->dict, dict_str_visitor, &state);
-    *state.end++ = ')';
+    if (REMAINING > 0) {
+        *state.end++ = ')';        
+    }
     state.end[0] = 0;
+#undef REMAINING
 }
 
 static
@@ -198,16 +209,18 @@ void vec_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
     char *end = str;
     int i;
 
-    if (maxlen < 3) return;
-    
-    *end++ = '[';
+    if (REMAINING > 0) {
+        *end++ = '[';        
+    }
     for (i = 0; i < obj->vec.len && REMAINING > 2; i++) {
         end = obj_pnstr(obj->vec.elems[i], end, REMAINING - 2);
         if (i < obj->vec.len - 1 && REMAINING > 2) {
             *end++ = ' ';
         }
     }
-    *end++ = ']';
+    if (REMAINING > 0) {
+        *end++ = ']';        
+    }
     end[0] = 0;
 #undef REMAINING
 }

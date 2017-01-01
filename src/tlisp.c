@@ -213,6 +213,6 @@ int main(int argc, char **argv)
     genv_init(&genv, &proc);
     if (interactive) {
         return tlisp_repl(&genv);
-    } 
+    }
     return tlisp_file(argv[1], &genv);
 }

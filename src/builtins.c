@@ -270,6 +270,7 @@ tlisp_obj_t *tlisp_apply(tlisp_obj_t *args, env_t *env)
     if (!args) {
         proc_fatal(env->proc, "ERROR: apply requires at least one argument.\n");
     }
+
     fn = eval(args->car, env);
     fn_args = args->cdr;
     switch (fn->tag) {
@@ -298,59 +299,6 @@ tlisp_obj_t *tlisp_apply(tlisp_obj_t *args, env_t *env)
     }
     }
     return res;
-}
-
-tlisp_obj_t *tlisp_defstruct(tlisp_obj_t *args, env_t *env)
-{
-    tlisp_obj_t *name;
-    tlisp_obj_t *fields;
-    int nfields;
-    int currfield = 0;
-    tlisp_obj_t *obj;
-    
-    if (!args) {
-        proc_fatal(env->proc, "ERROR: defstruct requires at least one argument.\n");
-    }
-    name = arg_at(0, args);
-    print_obj(name);
-    assert_type(name, SYMBOL, env->proc);
-    fields = args->cdr;
-    nfields = list_len(fields);
-    
-    obj = proc_new_structdef(env->proc);
-    obj->structdef.nfields = nfields;
-    obj->structdef.field_names = malloc(sizeof(char *) * nfields);
-    while (fields) {
-        tlisp_obj_t *curr = fields->car;
-        assert_type(curr, SYMBOL, env->proc);
-        obj->structdef.field_names[currfield] = strdup(curr->sym);
-        fields = fields->cdr;
-        currfield++;
-    }
-    env_add(env, name->sym, obj);
-    return obj;
-}
-
-tlisp_obj_t *tlisp_setq(tlisp_obj_t *args, env_t *env)
-{
-    tlisp_obj_t *structobj;
-    tlisp_obj_t *field;
-    tlisp_obj_t *newval;
-
-    assert_nargs(3, args, env->proc);
-    structobj = eval(arg_at(0, args), env);
-    field = arg_at(1, args);
-    newval = eval(arg_at(2, args), env);
-    assert_type(structobj, STRUCT, env->proc);
-    assert_type(field, SYMBOL, env->proc);
-    if (!struct_setq(&structobj->structobj, field->sym, newval)) {
-        char errstr[256];
-        char objstr[128];
-        snprintf(errstr, 256, "ERROR: No field %s for struct %s.\n",
-                 field->sym, obj_nstr(structobj, objstr, 128));
-        proc_fatal(env->proc, errstr);
-    }
-    return structobj; 
 }
 
 tlisp_obj_t *tlisp_quote_fn(tlisp_obj_t *args, env_t *env)
@@ -405,7 +353,8 @@ tlisp_obj_t *tlisp_type_of(tlisp_obj_t *args, env_t *env)
     assert_nargs(1, args, env->proc);
     arg = eval(args->car, env);
     res = proc_new_str(env->proc);
-    res->str = strdup(tag_str(arg->tag));
+    res->str = arg->tag == STRUCT ?
+        strdup(arg->structobj.sdef->name) : strdup(tag_str(arg->tag));
     return res;
 }
 
@@ -511,6 +460,59 @@ tlisp_obj_t *tlisp_set(tlisp_obj_t *args, env_t *env)
         proc_fatal(env->proc, errstr);
     }
     return val;
+}
+
+tlisp_obj_t *tlisp_defstruct(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *name;
+    tlisp_obj_t *fields;
+    int nfields;
+    int currfield = 0;
+    tlisp_obj_t *obj;
+    
+    if (!args) {
+        proc_fatal(env->proc, "ERROR: defstruct requires at least one argument.\n");
+    }
+    name = arg_at(0, args);
+    fields = args->cdr;
+    nfields = list_len(fields);
+    assert_type(name, SYMBOL, env->proc);
+    
+    obj = proc_new_structdef(env->proc);
+    obj->structdef.name = strdup(name->sym);
+    obj->structdef.nfields = nfields;
+    obj->structdef.field_names = malloc(sizeof(char *) * nfields);
+    while (fields) {
+        tlisp_obj_t *curr = fields->car;
+        assert_type(curr, SYMBOL, env->proc);
+        obj->structdef.field_names[currfield] = strdup(curr->sym);
+        fields = fields->cdr;
+        currfield++;
+    }
+    env_add(env, name->sym, obj);
+    return obj;
+}
+
+tlisp_obj_t *tlisp_setq(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *structobj;
+    tlisp_obj_t *field;
+    tlisp_obj_t *newval;
+
+    assert_nargs(3, args, env->proc);
+    structobj = eval(arg_at(0, args), env);
+    field = arg_at(1, args);
+    newval = eval(arg_at(2, args), env);
+    assert_type(structobj, STRUCT, env->proc);
+    assert_type(field, SYMBOL, env->proc);
+    if (!struct_setq(&structobj->structobj, field->sym, newval)) {
+        char errstr[256];
+        char objstr[128];
+        snprintf(errstr, 256, "ERROR: No field %s for struct %s.\n",
+                 field->sym, obj_nstr(structobj, objstr, 128));
+        proc_fatal(env->proc, errstr);
+    }
+    return structobj; 
 }
 
 tlisp_obj_t *tlisp_lambda(tlisp_obj_t *args, env_t *env)

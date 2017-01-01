@@ -4,6 +4,7 @@
 typedef struct tlisp_obj_t tlisp_obj_t;
 
 typedef struct tlisp_structdef_t {
+    char *name;
     int nfields;
     char **field_names;
 } tlisp_structdef_t;
