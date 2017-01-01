@@ -37,12 +37,7 @@ tlisp_obj_t *num_cpy(tlisp_obj_t *obj, process_t *proc)
 static
 int nargs(tlisp_obj_t *args)
 {
-    int a = 0;
-    while (args) {
-        a++;
-        args = args->cdr;
-    }
-    return a;
+    return list_len(args);
 }
 
 static
@@ -92,8 +87,59 @@ tlisp_obj_t *arg_at(int idx, tlisp_obj_t *args)
     return args->car;
 }
 
+static
+tlisp_obj_t *apply_lambda(tlisp_obj_t *fn, tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *arg_list = fn->car;
+    tlisp_obj_t *body = fn->cdr;
+    tlisp_obj_t *res;
+
+    while (arg_list || args) {
+        if (!arg_list) {
+            proc_fatal(env->proc, "ERROR: Too many arguments.\n");
+        }
+        if (!args) {
+            proc_fatal(env->proc, "ERROR: Too few arguments.\n");
+        }
+        env_add(env, arg_list->car->sym, eval(args->car, env));
+        arg_list = arg_list->cdr;
+        args = args->cdr;
+    }
+    while (body) {
+        res = eval(body->car, env);
+        body = body->cdr;
+    }
+    return res;
+}
+
+static
+tlisp_obj_t *apply_macro(tlisp_obj_t *macro, tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *arg_list = macro->car;
+    tlisp_obj_t *body = macro->cdr;
+    tlisp_obj_t *res;
+
+    while (arg_list || args) {
+        if (!arg_list) {
+            proc_fatal(env->proc, "ERROR: Too many arguments.\n");
+        }
+        if (!args) {
+            proc_fatal(env->proc, "ERROR: Too few arguments.\n");
+        }
+        env_add(env, arg_list->car->sym, args->car);
+        arg_list = arg_list->cdr;
+        args = args->cdr;
+    }
+    body->car = eval(body->car, env);
+    while (body) {
+        res = eval(body->car, env);
+        body = body->cdr;
+    }
+    return res;
+}
+
 static 
-tlisp_obj_t *call_fn(tlisp_obj_t *fn, tlisp_obj_t *args, env_t *env)
+tlisp_obj_t *apply_fn(tlisp_obj_t *fn, tlisp_obj_t *args, env_t *env)
 {
     if (fn->tag == NFUNC) {
         return fn->fn(args, env);
@@ -101,24 +147,24 @@ tlisp_obj_t *call_fn(tlisp_obj_t *fn, tlisp_obj_t *args, env_t *env)
         env_t inner_env;
         tlisp_obj_t *res;
         env_init(&inner_env, env, env->proc);
-        res = apply(fn, args, &inner_env);
+        res = apply_lambda(fn, args, &inner_env);
         env_destroy(&inner_env);
         return res;
     }
 }
 
 static
-tlisp_obj_t *call_1arity_fn(tlisp_obj_t *fn, tlisp_obj_t *arg, env_t *env)
+tlisp_obj_t *apply_1arity_fn(tlisp_obj_t *fn, tlisp_obj_t *arg, env_t *env)
 {
     tlisp_obj_t arglist;
     arglist.tag = CONS;
     arglist.car = arg;
     arglist.cdr = NULL;
-    return call_fn(fn, &arglist, env);
+    return apply_fn(fn, &arglist, env);
 }
 
 static
-tlisp_obj_t *call_2arity_fn(tlisp_obj_t *fn,
+tlisp_obj_t *apply_2arity_fn(tlisp_obj_t *fn,
                             tlisp_obj_t *arg1, tlisp_obj_t *arg2,
                             env_t *env)
 {
@@ -130,7 +176,52 @@ tlisp_obj_t *call_2arity_fn(tlisp_obj_t *fn,
     cons2.tag = CONS;
     cons2.car = arg2;
     cons2.cdr = NULL;
-    return call_fn(fn, &cons1, env);
+    return apply_fn(fn, &cons1, env);
+}
+
+static
+tlisp_obj_t *create_struct(tlisp_obj_t *structdef, tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *structobj;
+    int nfields = structdef->structdef.nfields;
+    int fieldnum = 0;
+    
+    if (nargs(args) > nfields) {
+        proc_fatal(env->proc, "ERROR: Too many fields to instantiate struct.\n");
+    }
+    structobj = proc_new_struct(env->proc);
+    structobj->structobj.sdef = &structdef->structdef;
+    structobj->structobj.fields = malloc(sizeof(tlisp_obj_t *) * nfields);
+    while (args) {
+        structobj->structobj.fields[fieldnum] = eval(args->car, env);
+        args = args->cdr;
+        fieldnum++;
+    }
+    while (fieldnum < nfields) {
+        structobj->structobj.fields[fieldnum] = tlisp_nil;
+        fieldnum++;
+    }
+    return structobj;
+}
+
+static
+tlisp_obj_t *get_struct_field(tlisp_obj_t *structobj, tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *field;
+    tlisp_obj_t *res;
+
+    assert_nargs(1, args, env->proc);
+    field = arg_at(0, args);
+    assert_type(field, SYMBOL, env->proc);
+    res = struct_get_field(&structobj->structobj, field->sym);
+    if (!res) {
+        char errstr[256];
+        char objstr[128];
+        snprintf(errstr, 256, "ERROR: No field %s in %s.\n",
+                 field->sym, obj_nstr(structobj, objstr, 128));
+        proc_fatal(env->proc, errstr);
+    }
+    return res ? res : tlisp_nil;
 }
 
 tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *env)
@@ -152,42 +243,11 @@ tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *env)
     }
     case CONS:
         return tlisp_apply(obj, env);
-    case NFUNC:
-    case DICT:
-    case VEC:
-    case LAMBDA:
-    case MACRO:
-        fprintf(stderr, "ERROR: eval called on function or macro.\n");
+    default:
+        fprintf(stderr, "Internal error. Eval called on inappropriate type %s.\n",
+                tag_str(obj->tag));
         exit(1);
     }
-}
-
-tlisp_obj_t *apply(tlisp_obj_t *fn, tlisp_obj_t *args, env_t *env)
-{
-    tlisp_obj_t *arg_list = fn->car;
-    tlisp_obj_t *body = fn->cdr;
-    tlisp_obj_t *res;
-
-    while (arg_list || args) {
-        if (!arg_list) {
-            proc_fatal(env->proc, "ERROR: Too many arguments.\n");
-        }
-        if (!args) {
-            proc_fatal(env->proc, "ERROR: Too few arguments.\n");
-        }
-        env_add(env, arg_list->car->sym, fn->tag == MACRO ? args->car : eval(args->car, env));
-        arg_list = arg_list->cdr;
-        args = args->cdr;
-    }
-    if (fn->tag == MACRO) {
-        body->car = eval(body->car, env);
-        env = env->outer;
-    }
-    while (body) {
-        res = eval(body->car, env);
-        body = body->cdr;
-    }
-    return res;
 }
 
 tlisp_obj_t *tlisp_eval(tlisp_obj_t *args, env_t *env)
@@ -205,14 +265,92 @@ tlisp_obj_t *tlisp_apply(tlisp_obj_t *args, env_t *env)
 {
     tlisp_obj_t *fn;
     tlisp_obj_t *fn_args;
+    tlisp_obj_t *res = NULL;
 
     if (!args) {
         proc_fatal(env->proc, "ERROR: apply requires at least one argument.\n");
     }
     fn = eval(args->car, env);
     fn_args = args->cdr;
-    assert_fn(fn, env->proc);
-    return call_fn(fn, fn_args, env);
+    switch (fn->tag) {
+    case NFUNC:
+    case LAMBDA: {
+        res = apply_fn(fn, fn_args, env);
+        break;
+    }
+    case MACRO: {
+        res = apply_macro(fn, fn_args, env);
+        break;
+    }
+    case STRUCTDEF: {
+        res = create_struct(fn, fn_args, env);
+        break;
+    }
+    case STRUCT: {
+        res = get_struct_field(fn, fn_args, env);
+        break;
+    }
+    default: {
+        char errstr[256];
+        snprintf(errstr, 256, "ERROR: apply cannot be called on object of type %s.\n",
+                 tag_str(fn->tag));
+        proc_fatal(env->proc, errstr);
+    }
+    }
+    return res;
+}
+
+tlisp_obj_t *tlisp_defstruct(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *name;
+    tlisp_obj_t *fields;
+    int nfields;
+    int currfield = 0;
+    tlisp_obj_t *obj;
+    
+    if (!args) {
+        proc_fatal(env->proc, "ERROR: defstruct requires at least one argument.\n");
+    }
+    name = arg_at(0, args);
+    print_obj(name);
+    assert_type(name, SYMBOL, env->proc);
+    fields = args->cdr;
+    nfields = list_len(fields);
+    
+    obj = proc_new_structdef(env->proc);
+    obj->structdef.nfields = nfields;
+    obj->structdef.field_names = malloc(sizeof(char *) * nfields);
+    while (fields) {
+        tlisp_obj_t *curr = fields->car;
+        assert_type(curr, SYMBOL, env->proc);
+        obj->structdef.field_names[currfield] = strdup(curr->sym);
+        fields = fields->cdr;
+        currfield++;
+    }
+    env_add(env, name->sym, obj);
+    return obj;
+}
+
+tlisp_obj_t *tlisp_setq(tlisp_obj_t *args, env_t *env)
+{
+    tlisp_obj_t *structobj;
+    tlisp_obj_t *field;
+    tlisp_obj_t *newval;
+
+    assert_nargs(3, args, env->proc);
+    structobj = eval(arg_at(0, args), env);
+    field = arg_at(1, args);
+    newval = eval(arg_at(2, args), env);
+    assert_type(structobj, STRUCT, env->proc);
+    assert_type(field, SYMBOL, env->proc);
+    if (!struct_setq(&structobj->structobj, field->sym, newval)) {
+        char errstr[256];
+        char objstr[128];
+        snprintf(errstr, 256, "ERROR: No field %s for struct %s.\n",
+                 field->sym, obj_nstr(structobj, objstr, 128));
+        proc_fatal(env->proc, errstr);
+    }
+    return structobj; 
 }
 
 tlisp_obj_t *tlisp_quote_fn(tlisp_obj_t *args, env_t *env)
@@ -795,7 +933,7 @@ tlisp_obj_t *tlisp_for_each(tlisp_obj_t *args, env_t *env)
     fn = eval(args->cdr->car, env);
     assert_fn(fn, env->proc);
     while (list) {
-        call_1arity_fn(fn, list->car, env);
+        apply_1arity_fn(fn, list->car, env);
         list = list->cdr;
     }
     return tlisp_nil;
@@ -817,12 +955,12 @@ tlisp_obj_t *tlisp_map(tlisp_obj_t *args, env_t *env)
     fn = eval(args->cdr->car, env);
     assert_fn(fn, env->proc);
     res = proc_new_cons(env->proc);
-    res->car = call_1arity_fn(fn, list->car, env);
+    res->car = apply_1arity_fn(fn, list->car, env);
     curr = res;
     while ((list = list->cdr)) {
         curr->cdr = proc_new_cons(env->proc);
         curr = curr->cdr;
-        curr->car = call_1arity_fn(fn, list->car, env);
+        curr->car = apply_1arity_fn(fn, list->car, env);
     }
     return res;
 }
@@ -843,7 +981,7 @@ tlisp_obj_t *tlisp_filter(tlisp_obj_t *args, env_t *env)
     fn = eval(args->cdr->car, env);
     assert_fn(fn, env->proc);
     while (list) {
-        tlisp_obj_t *keep = call_1arity_fn(fn, list->car, env);
+        tlisp_obj_t *keep = apply_1arity_fn(fn, list->car, env);
         if (is_true(keep)) {
             if (res == NULL) {
                 res = proc_new_cons(env->proc);
@@ -877,10 +1015,10 @@ tlisp_obj_t *tlisp_reduce(tlisp_obj_t *args, env_t *env)
     if (!list->cdr) {
         return list->car;
     }
-    res = call_2arity_fn(fn, list->car, list->cdr->car, env);
+    res = apply_2arity_fn(fn, list->car, list->cdr->car, env);
     list = list->cdr->cdr;
     while (list) {
-        res = call_2arity_fn(fn, res, list->car, env);
+        res = apply_2arity_fn(fn, res, list->car, env);
         list = list->cdr;
     }
     return res;

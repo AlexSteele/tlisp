@@ -2,6 +2,7 @@
 #define TLISP_CORE_H_
 
 #include "dict.h"
+#include "struct.h"
 #include "vector.h"
 #include <stddef.h>
 
@@ -13,6 +14,8 @@ enum obj_tag_t {
     STRING,
     SYMBOL,
     CONS,
+    STRUCTDEF,
+    STRUCT,
     DICT,
     VEC,
     NFUNC,
@@ -33,6 +36,8 @@ typedef struct tlisp_obj_t {
             struct tlisp_obj_t *car;
             struct tlisp_obj_t *cdr;
         };
+        tlisp_structdef_t structdef;
+        tlisp_struct_t structobj;
         tlisp_dict_t dict;
         tlisp_vector_t vec;
         tlisp_fn fn;

@@ -34,6 +34,7 @@ void gc_mark(tlisp_obj_t *obj, void *procptr)
     case NFUNC:
     case NIL:
     case SYMBOL:
+    case STRUCTDEF:
         return;
     case LAMBDA:
     case MACRO:
@@ -42,6 +43,17 @@ void gc_mark(tlisp_obj_t *obj, void *procptr)
         // were allocated by the reader outside the context
         // of the process.
         return;
+    case STRUCT: {
+        int nfields = obj->structobj.sdef->nfields;
+        int i;
+
+        /* TODO: Don't mark unless we know the associated structdef is in scope. */
+
+        for (i = 0; i < nfields; i++) {
+            gc_mark(obj->structobj.fields[i], proc);
+        }
+        return;
+    }
     case CONS:
         gc_mark(obj->car, proc);
         while ((obj = obj->cdr)) {
@@ -70,6 +82,12 @@ void free_obj(tlisp_obj_t *obj)
     case LAMBDA:
     case MACRO:
     case CONS:
+        return;
+    case STRUCTDEF:
+        structdef_destroy(&obj->structdef);
+        return;
+    case STRUCT:
+        struct_destroy(&obj->structobj);
         return;
     case DICT:
         dict_destroy(&obj->dict);

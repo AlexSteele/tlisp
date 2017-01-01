@@ -12,6 +12,8 @@ const char *tag_str(enum obj_tag_t t)
     case NUM: return "num";
     case STRING: return "string";
     case SYMBOL: return "symbol";
+    case STRUCTDEF: return "structdef";
+    case STRUCT: return "struct";
     case NFUNC: return "nfunc";
     case CONS: return "cons";
     case DICT: return "dict";
@@ -29,6 +31,8 @@ size_t obj_hash(tlisp_obj_t *obj)
     case NUM:
     case STRING:
     case SYMBOL:
+    case STRUCTDEF:
+    case STRUCT:
     case CONS:
     case DICT:
     case VEC:
@@ -56,6 +60,8 @@ int obj_equals(tlisp_obj_t *first, tlisp_obj_t *second)
     case NFUNC:
         return first->fn == second->fn;
     case BOOL:
+    case STRUCTDEF:
+    case STRUCT:
     case CONS:
     case DICT:
     case VEC:
@@ -67,6 +73,21 @@ int obj_equals(tlisp_obj_t *first, tlisp_obj_t *second)
 }
 
 static
+char *obj_pnstr(tlisp_obj_t *obj, char *str, size_t maxlen)
+{
+    char *beg;
+    char *end;
+
+    beg = obj_nstr(obj, str, maxlen);
+    end = beg;
+    while ((end - beg) < maxlen && *end) {
+        end++;
+    }
+    return end;
+}
+
+
+static
 void cons_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
 {
 #define REMAINING (maxlen - (end - str))
@@ -76,10 +97,7 @@ void cons_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
 
     *end++ = '(';
     while (obj && REMAINING > 2) {
-        obj_nstr(obj->car, end, REMAINING - 2);
-        while (*end && REMAINING > 2) {
-            end++;
-        }
+        end = obj_pnstr(obj->car, end, REMAINING - 2);
         obj = obj->cdr;
         if (obj && REMAINING > 2) {
             *end++ = ' ';
@@ -88,6 +106,38 @@ void cons_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
     *end++ = ')';
     end[0] = 0;
 #undef REMAINING    
+}
+
+static
+void struct_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
+{
+#define REMAINING (maxlen - (end - str))
+    
+    int nfields = obj->structobj.sdef->nfields;
+    char **field_names = obj->structobj.sdef->field_names;
+    tlisp_obj_t **fields = obj->structobj.fields;
+    char *end;
+    int i;
+
+    if (maxlen < strlen("struct<>") + 1) return;
+
+    end = stpcpy(str, "struct<");
+    for (i = 0; i < nfields && REMAINING > 2; i++) {
+        end = stpncpy(end, field_names[i], REMAINING - 2);
+        
+        if (REMAINING < 4) break;
+        
+        *end++ = ':';
+        *end++ = ' ';
+        end = obj_pnstr(fields[i], end, REMAINING - 2);
+        if (i < nfields - 1 && REMAINING > 3) {
+            *end++ = ',';
+            *end++ = ' ';
+        }
+    }
+    *end++ = '>';
+    end[0] = 0;
+#undef REMAINING
 }
 
 struct dict_str_state {
@@ -107,18 +157,12 @@ void dict_str_visitor(tlisp_obj_t *key, tlisp_obj_t *val, void *stateptr)
 
     if (REMAINING <= 2) return;
     
-    obj_nstr(key, state->end, REMAINING - 2);
-    while (*state->end && REMAINING > 2) {
-        state->end++;
-    }
+    state->end = obj_pnstr(key, state->end, REMAINING - 2);
 
     if (REMAINING <= 3) return;
     
     *state->end++ = ' ';
-    obj_nstr(val, state->end, REMAINING - 2);
-    while (*state->end && REMAINING > 2) {
-        state->end++;
-    }
+    state->end = obj_pnstr(val, state->end, REMAINING - 2);
     state->nvisited++;
     unseen = state->dictlen - state->nvisited;
     if (REMAINING > 2 && unseen > 0) {
@@ -158,10 +202,7 @@ void vec_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
     
     *end++ = '[';
     for (i = 0; i < obj->vec.len && REMAINING > 2; i++) {
-        obj_nstr(obj->vec.elems[i], end, REMAINING - 2);
-        while (*end && REMAINING > 2) {
-            end++;
-        }
+        end = obj_pnstr(obj->vec.elems[i], end, REMAINING - 2);
         if (i < obj->vec.len - 1 && REMAINING > 2) {
             *end++ = ' ';
         }
@@ -188,6 +229,12 @@ char *obj_nstr(tlisp_obj_t *obj, char *str, size_t maxlen)
         break;
     case CONS: 
         cons_nstr(obj, str, maxlen);
+        break;
+    case STRUCTDEF:
+        strncpy(str, "<structdef>", maxlen);
+        break;
+    case STRUCT:
+        struct_nstr(obj, str, maxlen);
         break;
     case DICT:
         dict_nstr(obj, str, maxlen);

@@ -58,6 +58,8 @@ DEF_CONSTRUCTOR(sym, SYMBOL)
 DEF_CONSTRUCTOR(num, NUM)
 DEF_CONSTRUCTOR(lambda, LAMBDA)
 DEF_CONSTRUCTOR(macro, MACRO)
+DEF_CONSTRUCTOR(structdef, STRUCTDEF)
+DEF_CONSTRUCTOR(struct, STRUCT)
 
 tlisp_obj_t *proc_new_cons(process_t *proc)
 {

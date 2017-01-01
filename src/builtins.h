@@ -13,7 +13,6 @@ tlisp_obj_t *tlisp_true;
 tlisp_obj_t *tlisp_false;
 
 tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *);
-tlisp_obj_t *apply(tlisp_obj_t *fn, tlisp_obj_t *args, env_t *);
 
 // ----------------------------------------
 // Core
@@ -37,6 +36,8 @@ tlisp_obj_t *tlisp_car(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_cdr(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_print(tlisp_obj_t *, env_t *);
 tlisp_obj_t *tlisp_str(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_defstruct(tlisp_obj_t *, env_t *);
+tlisp_obj_t *tlisp_setq(tlisp_obj_t *, env_t *);
 
 
 // ----------------------------------------

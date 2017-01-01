@@ -74,6 +74,8 @@ void genv_init(env_t *genv, process_t *proc)
     REGISTER_NFUNC("append", tlisp_append);
     REGISTER_NFUNC("car", tlisp_car);
     REGISTER_NFUNC("cdr", tlisp_cdr);
+    REGISTER_NFUNC("defstruct", tlisp_defstruct);
+    REGISTER_NFUNC("setq", tlisp_setq);
     REGISTER_NFUNC("list", tlisp_list);
     REGISTER_NFUNC("#", tlisp_dict);
     REGISTER_NFUNC("dict", tlisp_dict);

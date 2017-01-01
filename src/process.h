@@ -23,6 +23,8 @@ void proc_fatal(process_t *, const char *);
 tlisp_obj_t *proc_new_num(process_t *);
 tlisp_obj_t *proc_new_str(process_t *);
 tlisp_obj_t *proc_new_sym(process_t *);
+tlisp_obj_t *proc_new_structdef(process_t *);
+tlisp_obj_t *proc_new_struct(process_t *);
 tlisp_obj_t *proc_new_cons(process_t *);
 tlisp_obj_t *proc_new_lambda(process_t *);
 tlisp_obj_t *proc_new_macro(process_t *);
