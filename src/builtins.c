@@ -43,7 +43,7 @@ int nargs(tlisp_obj_t *args)
 static
 void assert_fn(tlisp_obj_t *obj, process_t *proc)
 {
-    if (obj->tag != NFUNC && obj->tag != LAMBDA && obj->tag != MACRO) {
+    if (obj->tag != NFUNC && obj->tag != LAMBDA) {
         char errstr[256];
         char objstr[128];
         snprintf(errstr, 256, "ERROR: Wrong type for %s. Expected function.\n",
