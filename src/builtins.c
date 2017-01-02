@@ -221,7 +221,7 @@ tlisp_obj_t *get_struct_field(tlisp_obj_t *structobj, tlisp_obj_t *args, env_t *
                  field->sym, obj_nstr(structobj, objstr, 128));
         proc_fatal(env->proc, errstr);
     }
-    return res ? res : tlisp_nil;
+    return res;
 }
 
 tlisp_obj_t *eval(tlisp_obj_t *obj, env_t *env)
@@ -718,8 +718,7 @@ tlisp_obj_t *tlisp_ins(tlisp_obj_t *args, env_t *env)
         while ((args = args->cdr)) {
             tlisp_obj_t *cell = proc_new_cons(env->proc);
             cell->car = eval(args->car, env);
-            cell->cdr = coll;
-            coll = cell;
+            coll = list_ins(coll, cell);
         }
         res = coll;
         break;
@@ -770,6 +769,12 @@ tlisp_obj_t *tlisp_ins_at(tlisp_obj_t *args, env_t *env)
     switch (coll->tag) {
     case NIL: {
         res = tlisp_nil;
+        break;
+    }
+    case CONS: {
+        tlisp_obj_t *cell = proc_new_cons(env->proc);
+        cell->car = obj;
+        res = list_ins_at(coll, cell, idx->num);
         break;
     }
     case VEC: {
@@ -840,6 +845,11 @@ tlisp_obj_t *tlisp_rem(tlisp_obj_t *args, env_t *env)
         res = tlisp_nil;
         break;
     }
+    case CONS: {
+        res = list_rem(coll, key);
+        res = res ? res : tlisp_nil;
+        break;
+    }
     case DICT: {
         res = dict_rem(&coll->dict, key);
         res = res ? res : tlisp_nil;
@@ -871,6 +881,11 @@ tlisp_obj_t *tlisp_rem_at(tlisp_obj_t *args, env_t *env)
     switch (coll->tag) {
     case NIL: {
         res = tlisp_nil;
+        break;
+    }
+    case CONS: {
+        res = list_rem_at(coll, idx->num);
+        res = res ? res : tlisp_nil;
         break;
     }
     case VEC: {
