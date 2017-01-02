@@ -80,8 +80,13 @@ static
 void read_fail(read_state *reader)
 {
     char pos_str[256];
-    fprintf(stderr, "ERROR: Unexpected symbol '%c'.\n%s\n",
-            *reader->cursor, reader_pos_str(reader, pos_str, 256));
+    if (*reader->cursor) {
+        fprintf(stderr, "ERROR: Unexpected symbol '%c'.\n%s\n",
+                *reader->cursor, reader_pos_str(reader, pos_str, 256));
+    } else {
+        fprintf(stderr, "ERROR: Unexpected EOF.\n%s\n",
+                reader_pos_str(reader, pos_str, 256));
+    }
     exit(1);
 }
 
@@ -136,7 +141,7 @@ tlisp_obj_t *read_num(read_state *reader)
         neg = 1;
         reader_adv(reader);
     }
-    while ((c = *reader->cursor) && numstart(c)) {
+    while ((c = *reader->cursor) && isdigit(c)) {
         num *= 10;
         num += c - '0';
         reader_adv(reader);
@@ -164,38 +169,6 @@ tlisp_obj_t *read_str(read_state *reader)
     return obj;
 }
 
-static tlisp_obj_t *read_literal(read_state *);
-
-static
-tlisp_obj_t *read_delimited_form(read_state *reader, char delim)
-{
-    tlisp_obj_t *head = NULL;
-    tlisp_obj_t *curr, *next;
-    char c;
-
-    reader_adv(reader);
-    while ((c = *reader->cursor)) {
-        if (whitespace(c)) {
-            reader_adv(reader);
-            continue;
-        }
-        if (c == delim) {
-            reader_adv(reader);
-            break;
-        }
-
-        next = new_cons();
-        next->car = read_literal(reader);
-        if (head) {
-            curr->cdr = next;
-        } else {
-            head = next;
-        }
-        curr = next;
-    }
-    return head;
-}
-
 static
 tlisp_obj_t *read_sym(read_state *reader)
 {
@@ -210,6 +183,37 @@ tlisp_obj_t *read_sym(read_state *reader)
     obj->sym = strndup(reader->cursor, len);
     reader_adv_n(reader, len);
     return obj;
+}
+
+static tlisp_obj_t *read_literal(read_state *);
+
+static
+tlisp_obj_t *read_delimited_form(read_state *reader, char delim)
+{
+    tlisp_obj_t *head = NULL;
+    tlisp_obj_t *curr;
+    char c;
+
+    reader_adv(reader);
+    while (1) {
+        c = *reader->cursor;
+        if (!c) read_fail(reader);
+        if (c == delim) break;
+        if (whitespace(c)) {
+            reader_adv(reader);
+        } else {
+            tlisp_obj_t *next = new_cons();
+            next->car = read_literal(reader);
+            if (head) {
+                curr->cdr = next;
+            } else {
+                head = next;
+            }
+            curr = next;            
+        }
+    }
+    reader_adv(reader);
+    return head;
 }
 
 static
@@ -274,6 +278,8 @@ static
 tlisp_obj_t *read_literal(read_state *reader)
 {
     char c = *reader->cursor;
+
+    if (c == ')' || c == ']') read_fail(reader);
 
     if (c == '"') {
         return read_str(reader);
