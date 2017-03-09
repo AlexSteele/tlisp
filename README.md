@@ -4,7 +4,7 @@ An interpreter for tlisp, a play thing of mine.
 
 ##Language Overview
 
-tlisp is dynamically typed and imperative-leaning lisp.
+tlisp is a dynamically typed and imperative-leaning lisp.
 
 Builtin language constructs include functions (lambdas), macros, structs, vectors,
 dicts, and ... lists ... as well as control flow constructs (if and while) and
