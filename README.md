@@ -1,8 +1,8 @@
-#tlisp
+# tlisp
 
 An interpreter for tlisp, a play thing of mine.
 
-##Language Overview
+## Language Overview
 
 tlisp is a dynamically typed and imperative-leaning lisp.
 
@@ -12,11 +12,11 @@ support for global, let-scoped, and function-scoped assignment.
 
 In addition, it provides basic file IO via a small set libc wrappers.
 
-##Internals
+## Internals
 
 All tlisp objects are twenty-four bytes. They're heap-allocated, and the
 garbage collector uses a basic mark-and-sweep scheme (still very much in progress).
 
-##Examples
+## Examples
 
 See the examples directory :)
